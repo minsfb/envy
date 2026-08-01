@@ -19,4 +19,14 @@ trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT INT HUP TERM
 save_script=$(tmux show-option -gqv @nv_resurrect-save-script 2>/dev/null)
 [[ -n "$save_script" && -x "$save_script" ]] || exit 0
 
+# tmux-resurrect names snapshots only to the second and would overwrite an
+# existing same-second checkpoint. Wait until the next name is free so rapid
+# manual saves stay distinct.
+resurrect_dir=$(tmux show-option -gqv @resurrect-dir 2>/dev/null)
+if [[ -n "$resurrect_dir" ]]; then
+  while [[ -e "$resurrect_dir/tmux_resurrect_$(date +%Y%m%dT%H%M%S).txt" ]]; do
+    sleep 0.2
+  done
+fi
+
 "$save_script" "${1:-}"

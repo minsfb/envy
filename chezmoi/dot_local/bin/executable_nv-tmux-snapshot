@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
-"""Enrich a tmux-resurrect state file with durable agent resume commands."""
+"""Enrich tmux-resurrect state with agent resume commands and manage checkpoints."""
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import re
+import shlex
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+import datetime as dt
 from pathlib import Path
 
 
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
+SNAPSHOT_RE = re.compile(r"^tmux_resurrect_\d{8}T\d{6}\.txt$")
+ROLLOUT_ID_RE = re.compile(
+    r"rollout-.*-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$",
+    re.IGNORECASE,
+)
 AGENTS = {"claude", "codex", "pi"}
+RESUME_TOKEN = ":nv-agent-resume v1 "
 
 
 def tmux_lines(*arguments: str) -> list[str]:
@@ -27,7 +38,36 @@ def tmux_lines(*arguments: str) -> list[str]:
     return result.stdout.splitlines() if result.returncode == 0 else []
 
 
-def pane_metadata() -> dict[tuple[str, str, str], tuple[str, str, str]]:
+def tmux_option(name: str) -> str:
+    lines = tmux_lines("show-option", "-gqv", name)
+    return lines[0].strip() if lines else ""
+
+
+def display_message(message: str) -> None:
+    subprocess.run(["tmux", "display-message", message], check=False)
+
+
+def resurrect_dir() -> Path | None:
+    overridden = os.environ.get("TMUX_RESURRECT_DIR", "")
+    if overridden:
+        return Path(os.path.expanduser(overridden))
+    configured = tmux_option("@resurrect-dir")
+    if configured:
+        return Path(os.path.expanduser(configured))
+    return None
+
+
+def log_line(directory: Path, message: str) -> None:
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with (directory / "nv-agent-save.log").open("a", encoding="utf-8") as log:
+            log.write(f"[{timestamp}] {message}\n")
+    except OSError:
+        pass
+
+
+def pane_metadata() -> dict[tuple[str, str, str], tuple[str, str, str, str, str]]:
     format_string = "\t".join(
         (
             "#{session_name}",
@@ -36,14 +76,22 @@ def pane_metadata() -> dict[tuple[str, str, str], tuple[str, str, str]]:
             "#{@nv_agent_schema}",
             "#{@nv_agent_kind}",
             "#{@nv_agent_session_id}",
+            "#{pane_pid}",
+            "#{pane_current_path}",
         )
     )
-    result: dict[tuple[str, str, str], tuple[str, str, str]] = {}
+    result: dict[tuple[str, str, str], tuple[str, str, str, str, str]] = {}
     for line in tmux_lines("list-panes", "-a", "-F", format_string):
         fields = line.split("\t")
-        if len(fields) != 6:
+        if len(fields) != 8:
             continue
-        result[(fields[0], fields[1], fields[2])] = (fields[3], fields[4], fields[5])
+        result[(fields[0], fields[1], fields[2])] = (
+            fields[3],
+            fields[4],
+            fields[5],
+            fields[6],
+            fields[7],
+        )
     return result
 
 
@@ -55,6 +103,111 @@ def transient_grouped_sessions() -> set[str]:
         if len(fields) == 2 and fields[1] == "1":
             result.add(fields[0])
     return result
+
+
+# ── Codex rollout verification ────────────────────────────────────────────────
+# Codex lifecycle hooks can report a forked or subagent session id. The primary
+# conversation is identified by the non-subagent rollout file the running Codex
+# process holds open, so the saved id is corrected against that ground truth.
+
+
+def descendant_pids(root_pid: int) -> list[int]:
+    result = subprocess.run(
+        ["ps", "-Ao", "pid=,ppid=,comm="],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    children: dict[int, list[int]] = {}
+    names: dict[int, str] = {}
+    for line in result.stdout.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            pid, ppid = int(parts[0]), int(parts[1])
+        except ValueError:
+            continue
+        children.setdefault(ppid, []).append(pid)
+        names[pid] = parts[2]
+    ordered: list[int] = []
+    queue = [root_pid]
+    while queue:
+        current = queue.pop()
+        for child in children.get(current, []):
+            ordered.append(child)
+            queue.append(child)
+    return [pid for pid in [root_pid, *ordered] if "codex" in names.get(pid, "")]
+
+
+def open_rollout_paths(pid: int) -> list[Path]:
+    paths: set[Path] = set()
+    proc_fds = Path(f"/proc/{pid}/fd")
+    if proc_fds.is_dir():
+        try:
+            descriptors = list(proc_fds.iterdir())
+        except OSError:
+            descriptors = []
+        for descriptor in descriptors:
+            try:
+                target = Path(os.readlink(descriptor))
+            except OSError:
+                continue
+            if ROLLOUT_ID_RE.search(target.name):
+                paths.add(target)
+    if not paths and shutil.which("lsof"):
+        result = subprocess.run(
+            ["lsof", "-Fn", "-p", str(pid)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        for line in result.stdout.splitlines():
+            if not line.startswith("n"):
+                continue
+            target = Path(line[1:])
+            if ROLLOUT_ID_RE.search(target.name):
+                paths.add(target)
+    return sorted(paths)
+
+
+def primary_codex_session(pane_pid: int, cwd: str, saved_id: str) -> str | None:
+    candidates: list[tuple[str, str, float]] = []
+    for pid in descendant_pids(pane_pid):
+        for path in open_rollout_paths(pid):
+            try:
+                with path.open("r", encoding="utf-8") as rollout:
+                    record = json.loads(rollout.readline())
+                if record.get("type") != "session_meta":
+                    continue
+                payload = record.get("payload") or {}
+                source = payload.get("source")
+                if isinstance(source, dict) and "subagent" in source:
+                    continue
+                session_id = str(payload.get("id") or "")
+                if not session_id:
+                    match = ROLLOUT_ID_RE.search(path.name)
+                    session_id = match.group(1) if match else ""
+                if session_id:
+                    candidates.append(
+                        (session_id, str(payload.get("cwd") or ""), path.stat().st_mtime)
+                    )
+            except (OSError, ValueError, TypeError):
+                continue
+
+    matching_cwd = [item for item in candidates if item[1] == cwd]
+    if matching_cwd:
+        candidates = matching_cwd
+    if len(candidates) == 1:
+        return candidates[0][0]
+    if not candidates:
+        return None
+    # Multiple primary rollout files are unusual. Keep an exact hook match when
+    # one exists; otherwise prefer the most recently written open rollout.
+    for session_id, _, _ in candidates:
+        if session_id == saved_id:
+            return saved_id
+    return max(candidates, key=lambda item: item[2])[0]
 
 
 def rewrite(path: Path) -> None:
@@ -72,15 +225,24 @@ def rewrite(path: Path) -> None:
         ):
             continue
         if fields[:1] == ["pane"] and len(fields) >= 11:
-            schema, agent, session_id = panes.get(
-                (fields[1], fields[2], fields[5]), ("", "", "")
+            schema, agent, session_id, pane_pid, pane_path = panes.get(
+                (fields[1], fields[2], fields[5]), ("", "", "", "", "")
             )
             if (
                 schema == "1"
                 and agent in AGENTS
                 and SESSION_ID_RE.fullmatch(session_id)
             ):
-                fields[10] = f":nv-agent-resume v1 {agent} {session_id}"
+                if agent == "codex" and pane_pid.isdigit():
+                    exact = primary_codex_session(int(pane_pid), pane_path, session_id)
+                    if exact and exact != session_id and SESSION_ID_RE.fullmatch(exact):
+                        log_line(
+                            path.parent,
+                            f"corrected Codex session for pane "
+                            f"{fields[1]}:{fields[2]}.{fields[5]}: {session_id} -> {exact}",
+                        )
+                        session_id = exact
+                fields[10] = f"{RESUME_TOKEN}{agent} {session_id}"
                 raw_line = "\t".join(fields)
         output.append(raw_line)
 
@@ -100,9 +262,166 @@ def rewrite(path: Path) -> None:
             os.unlink(temporary)
 
 
+# ── Checkpoint selection ──────────────────────────────────────────────────────
+
+
+def point_last_at(directory: Path, snapshot_name: str) -> None:
+    temporary = directory / f".last.envy-{os.getpid()}"
+    try:
+        temporary.unlink()
+    except FileNotFoundError:
+        pass
+    os.symlink(snapshot_name, temporary)
+    os.replace(temporary, directory / "last")
+
+
+def last_snapshot(directory: Path) -> Path | None:
+    last = directory / "last"
+    if not last.exists():
+        return None
+    try:
+        target = Path(os.readlink(last))
+        return target if target.is_absolute() else directory / target
+    except OSError:
+        return last
+
+
+def snapshot_label(snapshot: Path, current_name: str) -> str:
+    match = re.fullmatch(r"tmux_resurrect_(\d{8})T(\d{6})\.txt", snapshot.name)
+    if match:
+        date, clock = match.groups()
+        label = f"{date[:4]}-{date[4:6]}-{date[6:]} {clock[:2]}:{clock[2:4]}:{clock[4:]}"
+    else:
+        label = snapshot.name
+    try:
+        count = snapshot.read_text(encoding="utf-8").count(RESUME_TOKEN)
+    except (OSError, UnicodeError):
+        count = 0
+    label += f"  [{count} agent{'s' if count != 1 else ''}]"
+    if snapshot.name == current_name:
+        label += "  (last)"
+    return label
+
+
+def menu_action(arguments: list[str]) -> str:
+    command = " ".join(
+        shlex.quote(argument) for argument in [str(Path(__file__).resolve()), *arguments]
+    )
+    return f"run-shell {shlex.quote(command)}"
+
+
+def choose_snapshot(client: str, pane: str, offset: int) -> None:
+    directory = resurrect_dir()
+    if directory is None or not directory.is_dir():
+        display_message("Tmux persistence has not saved any snapshots yet")
+        return
+    snapshots = sorted(
+        (item for item in directory.glob("tmux_resurrect_*.txt") if SNAPSHOT_RE.fullmatch(item.name)),
+        reverse=True,
+    )
+    if not snapshots:
+        display_message("No tmux snapshots have been saved yet")
+        return
+
+    current = last_snapshot(directory)
+    current_name = current.name if current else ""
+    page_size = 10
+    offset = max(0, min(offset, max(0, len(snapshots) - 1)))
+    page = snapshots[offset : offset + page_size]
+    end = offset + len(page)
+    command = [
+        "tmux",
+        "display-menu",
+        "-M",
+        "-T",
+        f"restore snapshot | {offset + 1}-{end} of {len(snapshots)} | click or Enter",
+    ]
+    if client:
+        command.extend(["-c", client])
+    if pane:
+        command.extend(["-t", pane])
+    for snapshot in page:
+        command.extend(
+            [
+                snapshot_label(snapshot, current_name),
+                "",
+                menu_action(["restore", snapshot.name]),
+            ]
+        )
+    if offset > 0 or end < len(snapshots):
+        command.append("")
+    if offset > 0:
+        newer_offset = max(0, offset - page_size)
+        command.extend(
+            [
+                "Newer snapshots…",
+                "n",
+                menu_action(
+                    ["choose", "--client", client, "--pane", pane, "--offset", str(newer_offset)]
+                ),
+            ]
+        )
+    if end < len(snapshots):
+        command.extend(
+            [
+                "Older snapshots…",
+                "o",
+                menu_action(["choose", "--client", client, "--pane", pane, "--offset", str(end)]),
+            ]
+        )
+    subprocess.run(command, check=False)
+
+
+def restore_snapshot(selection: str) -> int:
+    directory = resurrect_dir()
+    if directory is None:
+        display_message("Tmux persistence is not active")
+        return 1
+    if selection == "last":
+        snapshot = last_snapshot(directory)
+        if snapshot is None:
+            display_message("No tmux snapshot has been saved yet")
+            return 1
+    else:
+        if not SNAPSHOT_RE.fullmatch(selection):
+            print(f"invalid tmux snapshot name: {selection}", file=sys.stderr)
+            return 2
+        snapshot = directory / selection
+    if not snapshot.is_file() or not SNAPSHOT_RE.fullmatch(snapshot.name):
+        display_message(f"Tmux snapshot not found: {snapshot.name}")
+        return 1
+
+    point_last_at(directory, snapshot.name)
+    restore_script = tmux_option("@resurrect-restore-script-path")
+    if not restore_script or not os.access(restore_script, os.X_OK):
+        display_message("tmux-resurrect restore script is unavailable")
+        return 1
+    return subprocess.run([restore_script], check=False).returncode
+
+
 def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] in {"choose", "restore"}:
+        parser = argparse.ArgumentParser(prog="nv-tmux-snapshot")
+        subparsers = parser.add_subparsers(dest="command", required=True)
+        choose = subparsers.add_parser("choose")
+        choose.add_argument("--client", default="")
+        choose.add_argument("--pane", default="")
+        choose.add_argument("--offset", type=int, default=0)
+        restore = subparsers.add_parser("restore")
+        restore.add_argument("snapshot")
+        arguments = parser.parse_args()
+        if arguments.command == "choose":
+            choose_snapshot(arguments.client, arguments.pane, arguments.offset)
+            return 0
+        return restore_snapshot(arguments.snapshot)
+
     if len(sys.argv) != 2:
-        print("usage: nv-tmux-snapshot RESURRECT_STATE_FILE", file=sys.stderr)
+        print(
+            "usage: nv-tmux-snapshot RESURRECT_STATE_FILE\n"
+            "       nv-tmux-snapshot choose [--client C] [--pane P] [--offset N]\n"
+            "       nv-tmux-snapshot restore {SNAPSHOT|last}",
+            file=sys.stderr,
+        )
         return 2
     path = Path(sys.argv[1])
     if not path.is_file():

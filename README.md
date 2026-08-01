@@ -112,6 +112,14 @@ saves on detach/session-close/manual events, and restores when a new tmux server
 starts. Selected Claude, Codex, and Pi adapters attach versioned session IDs,
 working-directory hints, and transcript-path hints to panes.
 
+Every save is a timestamped checkpoint; rapid manual saves stay distinct even
+within the same second. The tmux action menu's `Session snapshots` entry (or
+`nv-tmux-snapshot choose`) opens a paginated chooser that labels each
+checkpoint with its agent count and restores the selected layout. Codex session
+IDs are verified at save time against the primary non-subagent rollout file
+held open by the running Codex process, correcting hook-reported IDs before
+they are persisted; corrections are logged next to the snapshots.
+
 Restoration invokes each agent's supported resume command. It does not preserve
 process memory or copy transcript databases between hosts.
 
