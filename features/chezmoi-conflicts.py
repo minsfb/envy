@@ -74,7 +74,8 @@ def status(source: Path) -> list[StatusEntry]:
         if len(raw_line) < 4:
             continue
         target = Path(raw_line[3:])
-        if not target.is_absolute() or os.path.commonpath((HOME, target)) != str(HOME):
+        resolved = target.parent.resolve(strict=False) / target.name
+        if not target.is_absolute() or os.path.commonpath((HOME, resolved)) != str(HOME):
             raise BrokerError(f"refusing unexpected chezmoi target: {target}")
         entries.append(StatusEntry(raw_line[0], raw_line[1], target))
     return entries

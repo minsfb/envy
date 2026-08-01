@@ -26,8 +26,8 @@ _mins_py_manifest() {
 mins_manifest_init() {
   local key value facts_file facts_valid=true
   local bundles=("$@")
-  _MINS_MANIFEST_TEMP="$(mktemp "${TMPDIR:-/tmp}/mins-env-manifest.XXXXXX.json")"
-  python3 "$_MINS_MANIFEST_PY" compose "$_MINS_CORE_JSON" "${bundles[@]}" > "$_MINS_MANIFEST_TEMP" || {
+  _MINS_MANIFEST_TEMP="$(mktemp "${TMPDIR:-/tmp}/mins-env-manifest.json.XXXXXX")"
+  python3 "$_MINS_MANIFEST_PY" compose "$_MINS_CORE_JSON" ${bundles[0]+"${bundles[@]}"} > "$_MINS_MANIFEST_TEMP" || {
     rm -f "$_MINS_MANIFEST_TEMP"
     _MINS_MANIFEST_TEMP=""
     return 1

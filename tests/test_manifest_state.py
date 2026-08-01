@@ -48,7 +48,7 @@ class ManifestStateTest(unittest.TestCase):
 
     def test_explicit_bundle_composition_and_handler(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            bundle_root = Path(temporary) / "bundle"
+            bundle_root = Path(temporary).resolve() / "bundle"
             self.write_bundle(bundle_root)
             value = manifest_module.compose(ROOT / "mins-env.json", [str(bundle_root)])
             self.assertIn("example", value["features"])

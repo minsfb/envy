@@ -12,6 +12,4 @@ README:
 - new dependencies are exact, documented, and license-reviewed.
 
 Run every command listed in the README's Development section before submitting a
-change. Exporter and release changes must additionally pass the deterministic
-staging tests and an independent review of the exact release tree, provenance,
-dependency inventory, and checksums.
+change.
