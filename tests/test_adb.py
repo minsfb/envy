@@ -21,7 +21,7 @@ SPEC.loader.exec_module(adb)
 class AdbTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.sdk = self.root / "sdk"
         executable = self.sdk / "platform-tools" / "adb"
         executable.parent.mkdir(parents=True)

@@ -26,7 +26,7 @@ while (( _MINS_INDEX < ${#_MINS_RAW_ARGS[@]} )); do
   esac
   ((_MINS_INDEX++)) || true
 done
-set -- "${_MINS_COMMAND_ARGS[@]}"
+set -- ${_MINS_COMMAND_ARGS[0]+"${_MINS_COMMAND_ARGS[@]}"}
 unset _MINS_RAW_ARGS _MINS_COMMAND_ARGS _MINS_INDEX _MINS_ARG
 
 if [[ -z "${_MINS_BUNDLES[0]+set}" ]]; then
@@ -47,7 +47,7 @@ fi
 
 # shellcheck source=lib/features.sh
 source "$MINS_ENV_ROOT/lib/features.sh"
-mins_manifest_init "${_MINS_BUNDLES[@]}"
+mins_manifest_init ${_MINS_BUNDLES[0]+"${_MINS_BUNDLES[@]}"}
 # shellcheck source=lib/state.sh
 source "$MINS_ENV_ROOT/lib/state.sh"
 
@@ -372,7 +372,7 @@ _remove_deactivated_features() {
     deactivated+=("$feature")
   done
   for ((index=${#deactivated[@]}-1; index>=0; index--)); do reversed+=("${deactivated[$index]}"); done
-  for feature in "${reversed[@]}"; do
+  for feature in ${reversed[0]+"${reversed[@]}"}; do
     rc=0
     mins_run_feature_handler "$feature" remove || rc=$?
     if [[ $rc -ne 0 && $rc -ne $MINS_HANDLER_UNAVAILABLE ]]; then
@@ -523,7 +523,7 @@ cmd_upgrade() {
   if [[ "$dry_run" == false ]]; then
     log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/mins-env/logs"
     mkdir -p "$log_dir"
-    log_file="$(mktemp "$log_dir/$(date -u '+%Y%m%dT%H%M%SZ').XXXXXX.log")"
+    log_file="$(mktemp "$log_dir/$(date -u '+%Y%m%dT%H%M%SZ').log.XXXXXX")"
   fi
 
   for feature in "${targets[@]}"; do

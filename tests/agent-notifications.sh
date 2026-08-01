@@ -27,6 +27,9 @@ cp "$ROOT/chezmoi/dot_config/opencode/plugins/mins-agent-notifications.js" \
   "$CONFIG_DIR/opencode/plugins/mins-agent-notifications.js"
 cp "$ROOT/chezmoi/dot_pi/agent/extensions/mins-tmux-session.ts" \
   "$HOME_DIR/.pi/agent/extensions/mins-tmux-session.ts"
+mkdir -p "$CONFIG_DIR/alacritty"
+cp "$ROOT/chezmoi/dot_config/alacritty/alacritty.toml" \
+  "$CONFIG_DIR/alacritty/alacritty.toml"
 
 cat >"$HOME_DIR/.claude/settings.json" <<'EOF'
 {

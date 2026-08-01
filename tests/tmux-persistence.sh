@@ -60,11 +60,12 @@ cat >"$HOME_DIR/.codex/hooks.json" <<'EOF'
 }
 EOF
 
+TMUX_DIR="$(cd "$(dirname "$(command -v tmux)")" && pwd)"
 FEATURE_ENV=(
   HOME="$HOME_DIR"
   XDG_CONFIG_HOME="$CONFIG_DIR"
   XDG_STATE_HOME="$STATE_DIR"
-  PATH="$BIN_DIR:/usr/bin:/bin"
+  PATH="$BIN_DIR:$TMUX_DIR:/usr/bin:/bin"
   MINS_ENV_MANIFEST="$ENV_ROOT/mins-env.json"
 )
 env "${FEATURE_ENV[@]}" "$ENV_ROOT/features/tmux-persistence.py" converge >/dev/null

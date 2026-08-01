@@ -207,6 +207,9 @@ if sys.argv[1:] == ["which", "age"]:
 raise SystemExit(1)
 """,
         )
+        os.environ["PATH"] = os.pathsep.join(
+            (str(self.bin), os.path.dirname(sys.executable))
+        )
         self.assertEqual(secrets.required_tools()["age"], str(managed_age))
 
     def test_key_transfers_require_initialized_tools_before_ssh(self) -> None:
