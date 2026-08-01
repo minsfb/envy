@@ -314,9 +314,8 @@ read-only, diagnosis should explain actionable drift, and removal must delete
 only owned state while honoring `MINS_ENV_DRY_RUN` and `MINS_ENV_PURGE`.
 
 Add non-core defaults to `recommended_features` when the recommended preset
-should select them. Document the feature in the table above, add a focused
-test, and—for core files—add every new source path to
-`exporter/allowlist.txt`.
+should select them. Document the feature in the table above and add a focused
+test.
 
 ### Adding A Bundle
 
@@ -378,11 +377,7 @@ tests/tmux-persistence.sh
 tests/agent-assets.sh
 tests/shell-smoke.sh
 tests/agent-guidance.sh
-tests/exporter.sh
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-See `dependencies.json` for exact external revisions and licenses. Release
-staging, provenance, content scanning, and licensing gates live under
-`exporter/`. The exporter can prepare a deterministic Git commit without
-changing its remote; publishing requires an explicit `--push`.
+See `dependencies.json` for exact external revisions and licenses.
