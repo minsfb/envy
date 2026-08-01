@@ -102,9 +102,13 @@ mkdir -p "$HOME_DIR/.config/mise/conf.d"
 printf '[tools]\n"npm:example-tool" = "latest"\n' >"$HOME_DIR/.config/mise/conf.d/50-test.toml"
 : >"$HOME_DIR/.fake-mise-args"
 run_cli upgrade --only mise --force >"$SANDBOX/confd.out"
-grep -qx 'install --locked' "$HOME_DIR/.fake-mise-args" || fail 'locked mise install did not run'
 grep -qx 'install' "$HOME_DIR/.fake-mise-args" || fail 'conf.d mise install did not run'
+grep -qx 'install --locked' "$HOME_DIR/.fake-mise-args" && \
+  fail 'locked mise install ran despite conf.d tools'
 rm -rf "$HOME_DIR/.config/mise/conf.d"
+: >"$HOME_DIR/.fake-mise-args"
+run_cli upgrade --only mise --force >"$SANDBOX/locked.out"
+grep -qx 'install --locked' "$HOME_DIR/.fake-mise-args" || fail 'locked mise install did not run'
 
 if run_cli secrets pull-key --yes test-host >"$SANDBOX/secrets-disabled.out" 2>&1; then
   fail "pull-key unexpectedly ran without the secrets feature installed"
