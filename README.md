@@ -11,7 +11,10 @@ drift, diagnoses focused areas, and conservatively removes only state it owns.
 - Git and standard Unix command-line tools
 - Chezmoi and Mise on Linux; macOS can install them through an existing
   Homebrew installation
-- zsh and tmux for the recommended terminal preset
+- zsh and tmux for the recommended terminal preset; the terminal feature
+  installs them itself through Homebrew on macOS or the first native Linux
+  package manager (apt, dnf, pacman, or apk) via `mise bootstrap packages`
+  and the installer-only `bootstrap-packages.toml`
 
 Android SDKs, agent CLIs, and terminal applications remain externally supplied.
 envy does not redistribute them.
@@ -73,13 +76,17 @@ tools to the managed toolchain by shipping a chezmoi-managed
 through an unlocked `mise install` (core versions stay exact through the pins
 in `config.toml`); machines without them keep the locked install.
 
+Verification recomposes the configured chezmoi sources and compares the result
+with the active composed tree, so edits inside core or bundle source trees
+register as drift and converge on a plain `envy upgrade`.
+
 ## Features
 
 | Feature | Preset | Purpose |
 | --- | --- | --- |
 | `smart-merge` | core | Initialize the JSON/text merge engine before managed-file convergence |
 | `chezmoi` | core | Managed shell, tmux, Alacritty, Mise, and agent adapters |
-| `mise` | core | Install the exact tool set in the active locked Mise configuration |
+| `mise` | core | Install the exact core tool set plus unlocked bundle conf.d layers |
 | `path` | core | Generate the selected command environment |
 | `terminal` | recommended | Ensure zsh/tmux through the native package manager and provide Alacritty on macOS |
 | `agent-notifications` | recommended | Route Claude, Codex, MetaCode, and Pi attention events through terminal BEL |
@@ -170,9 +177,14 @@ envy install --reconfigure
 
 Feature installation applies the managed Mise configuration and installs the
 locked `sops`, `age`, and `age-keygen` tools before running the secrets handler.
-The initial secrets convergence can remain incomplete until an identity and an
-encrypted source exist; the feature and its transfer commands are nevertheless
-initialized once the toolchain is current.
+First convergence bootstraps the rest: a software age identity is generated at
+the configured path when none exists, and when the plaintext target is present
+but no encrypted source file exists yet, the target is encrypted to the
+identity's recipient at the configured source path. An existing-but-invalid
+source file is never overwritten. Only a machine with neither a plaintext
+target nor a ciphertext source stays incomplete; convergence then fails with
+guidance, and the transfer commands are available once the toolchain is
+current.
 
 Standalone installs default to `~/.secrets.sops`,
 `~/.config/sops/age/keys.txt`, and a restored `~/.secrets`. A bundle or local
@@ -199,20 +211,17 @@ encrypted sources:
 The identity file contains one or more native age identities. Its configurable
 path keeps private key material out of the manifest.
 
-On the first machine, generate a software identity and encrypt the current
-plaintext target to its public recipient:
+On the first machine, write the plaintext target (for example a shell fragment
+of `export KEY=value` lines at `~/.secrets`), then let convergence generate the
+identity and the encrypted source in one step:
 
 ```sh
-umask 077
-mkdir -p ~/.config/sops/age
-age-keygen -o ~/.config/sops/age/keys.txt
-AGE_RECIPIENT="$(age-keygen -y ~/.config/sops/age/keys.txt)"
-sops --encrypt --age "$AGE_RECIPIENT" \
-  --input-type binary --output-type binary \
-  --output ~/.secrets.sops ~/.secrets
-chmod 600 ~/.secrets.sops
-unset AGE_RECIPIENT
+envy upgrade --only secrets --force
+envy doctor secrets --verbose
 ```
+
+The equivalent manual `age-keygen`/`sops --encrypt` commands remain valid for
+externally provisioned identities or hardware-backed setups.
 
 To provision the same software identity on another trusted Unix host, enable
 the secrets feature on the machine that will invoke the command, then use the
