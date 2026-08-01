@@ -110,6 +110,14 @@ rm -rf "$HOME_DIR/.config/mise/conf.d"
 run_cli upgrade --only mise --force >"$SANDBOX/locked.out"
 grep -qx 'install --locked' "$HOME_DIR/.fake-mise-args" || fail 'locked mise install did not run'
 
+printf '# drift\n' >>"$HOME_DIR/.local/share/envy/chezmoi-source/dot_tmux.conf"
+if run_cli verify --only chezmoi >"$SANDBOX/drift.out"; then
+  fail 'composed-source drift went undetected'
+fi
+run_cli upgrade --only chezmoi >"$SANDBOX/drift-heal.out"
+run_cli verify --only chezmoi >"$SANDBOX/drift-verify.out" || \
+  fail 'composed-source drift was not healed by upgrade'
+
 if run_cli secrets pull-key --yes test-host >"$SANDBOX/secrets-disabled.out" 2>&1; then
   fail "pull-key unexpectedly ran without the secrets feature installed"
 fi
