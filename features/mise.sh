@@ -17,8 +17,9 @@ pkg_use_external_proxy
 unset DOTNET_ROOT
 
 # Bundles may layer additional tools through chezmoi-managed conf.d files.
-# Those tools have no entry in the core lockfile, so they converge with a
-# second unlocked pass that leaves the locked core tool set authoritative.
+# Those tools have no entry in the core lockfile and mise refuses a --locked
+# install that covers them, so conf.d machines converge with a single unlocked
+# pass. Core versions stay exact through the pins in config.toml itself.
 _confd_present() {
   local entry
   for entry in "$MISE_CONFD_DIR"/*.toml; do
@@ -39,18 +40,20 @@ _converge() {
     mkdir -p "$STATE_ROOT/providers"
     touch "$STATE_ROOT/providers/mise.installed"
   fi
-  mise install --locked
   if _confd_present; then
     mise install
+  else
+    mise install --locked
   fi
 }
 
 _verify() {
   command -v mise >/dev/null
   [[ -f "$MISE_CONFIG" ]]
-  mise install --locked --dry-run-code >/dev/null
   if _confd_present; then
     mise install --dry-run-code >/dev/null
+  else
+    mise install --locked --dry-run-code >/dev/null
   fi
 }
 
