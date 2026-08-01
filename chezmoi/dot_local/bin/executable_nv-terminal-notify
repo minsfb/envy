@@ -4,12 +4,12 @@ set -u
 
 [[ "$(uname -s 2>/dev/null)" == Darwin ]] || exit 0
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-[[ -r "$CONFIG_HOME/mins-env/agent-notifications.enabled" ]] || exit 0
+[[ -r "$CONFIG_HOME/envy/agent-notifications.enabled" ]] || exit 0
 command -v osascript >/dev/null 2>&1 || exit 0
 
 runtime="${TMPDIR:-/tmp}"
-lock="$runtime/mins-terminal-notify-${UID}.lock"
-stamp="$runtime/mins-terminal-notify-${UID}.stamp"
+lock="$runtime/nv-terminal-notify-${UID}.lock"
+stamp="$runtime/nv-terminal-notify-${UID}.stamp"
 umask 077
 mkdir "$lock" 2>/dev/null || exit 0
 trap 'rmdir "$lock" 2>/dev/null || true' EXIT HUP INT TERM

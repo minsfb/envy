@@ -24,11 +24,11 @@ SCHEMA_VERSION = 1
 AGENTS = {"claude", "codex", "pi"}
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 PANE_OPTIONS = (
-    "@mins_agent_schema",
-    "@mins_agent_kind",
-    "@mins_agent_session_id",
-    "@mins_agent_cwd",
-    "@mins_agent_transcript",
+    "@nv_agent_schema",
+    "@nv_agent_kind",
+    "@nv_agent_session_id",
+    "@nv_agent_cwd",
+    "@nv_agent_transcript",
 )
 
 
@@ -41,7 +41,7 @@ def state_home() -> Path:
 
 
 def feature_enabled() -> bool:
-    return (config_home() / "mins-env" / "tmux-persistence.enabled").is_file()
+    return (config_home() / "envy" / "tmux-persistence.enabled").is_file()
 
 
 def valid_text(value: Any, *, absolute: bool = False) -> str:
@@ -78,7 +78,7 @@ def unset_pane_option(pane: str, name: str) -> None:
 
 
 def record_path(agent: str, session_id: str) -> Path:
-    return state_home() / "mins-env" / "agent-sessions" / agent / f"{session_id}.json"
+    return state_home() / "envy" / "agent-sessions" / agent / f"{session_id}.json"
 
 
 def atomic_json(path: Path, value: dict[str, Any]) -> None:
@@ -134,7 +134,7 @@ def persist_record(
 
 
 def request_snapshot() -> None:
-    helper = Path.home() / ".local" / "bin" / "mins-tmux-save"
+    helper = Path.home() / ".local" / "bin" / "nv-tmux-save"
     if not helper.is_file():
         return
     subprocess.Popen(
@@ -169,16 +169,16 @@ def register(agent: str, action: str, value: dict[str, Any]) -> None:
     transcript_path = valid_text(value.get("transcript_path"), absolute=True)
 
     if action == "start":
-        set_pane_option(pane, "@mins_agent_schema", str(SCHEMA_VERSION))
-        set_pane_option(pane, "@mins_agent_kind", agent)
-        set_pane_option(pane, "@mins_agent_session_id", session_id)
-        set_pane_option(pane, "@mins_agent_cwd", cwd)
-        set_pane_option(pane, "@mins_agent_transcript", transcript_path)
+        set_pane_option(pane, "@nv_agent_schema", str(SCHEMA_VERSION))
+        set_pane_option(pane, "@nv_agent_kind", agent)
+        set_pane_option(pane, "@nv_agent_session_id", session_id)
+        set_pane_option(pane, "@nv_agent_cwd", cwd)
+        set_pane_option(pane, "@nv_agent_transcript", transcript_path)
         persist_record(agent, session_id, pane, cwd, transcript_path, True)
         request_snapshot()
         return
 
-    pane_matches = pane_option(pane, "@mins_agent_session_id") == session_id
+    pane_matches = pane_option(pane, "@nv_agent_session_id") == session_id
     persist_record(agent, session_id, pane, cwd, transcript_path, False)
     if not pane_matches:
         return

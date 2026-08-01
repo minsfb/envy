@@ -19,29 +19,29 @@ from typing import Any
 HOME = Path.home()
 CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 STATE_HOME = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
-MARKER = CONFIG_HOME / "mins-env" / "tmux-persistence.enabled"
-STATE_ROOT = STATE_HOME / "mins-env" / "tmux-persistence"
-BACKUP_ROOT = STATE_HOME / "mins-env" / "backups" / "tmux-persistence"
+MARKER = CONFIG_HOME / "envy" / "tmux-persistence.enabled"
+STATE_ROOT = STATE_HOME / "envy" / "tmux-persistence"
+BACKUP_ROOT = STATE_HOME / "envy" / "backups" / "tmux-persistence"
 OWNERSHIP = STATE_ROOT / "ownership.json"
-HOOK_TOKEN = "mins-agent-register"
+HOOK_TOKEN = "nv-agent-register"
 
 HOOK_FILES = {
     "claude": HOME / ".claude" / "settings.json",
     "codex": HOME / ".codex" / "hooks.json",
 }
 HELPERS = (
-    "mins-agent-register",
-    "mins-agent-resume",
-    "mins-tmux-bootstrap",
-    "mins-tmux-restore",
-    "mins-tmux-save",
-    "mins-tmux-snapshot",
+    "nv-agent-register",
+    "nv-agent-resume",
+    "nv-tmux-bootstrap",
+    "nv-tmux-restore",
+    "nv-tmux-save",
+    "nv-tmux-snapshot",
 )
 PLUGIN_FILES = (
-    HOME / ".local" / "share" / "mins-tmux" / "tmux-resurrect" / "resurrect.tmux",
-    HOME / ".local" / "share" / "mins-tmux" / "tmux-continuum" / "continuum.tmux",
+    HOME / ".local" / "share" / "envy" / "tmux" / "tmux-resurrect" / "resurrect.tmux",
+    HOME / ".local" / "share" / "envy" / "tmux" / "tmux-continuum" / "continuum.tmux",
 )
-PI_EXTENSION = HOME / ".pi" / "agent" / "extensions" / "mins-tmux-session.ts"
+PI_EXTENSION = HOME / ".pi" / "agent" / "extensions" / "nv-tmux-session.ts"
 
 
 class FeatureError(RuntimeError):
@@ -49,7 +49,7 @@ class FeatureError(RuntimeError):
 
 
 def selected_adapters() -> set[str]:
-    manifest_path = os.environ.get("MINS_ENV_MANIFEST")
+    manifest_path = os.environ.get("ENVY_MANIFEST")
     if not manifest_path:
         return set()
     manifest = load_json(Path(manifest_path))
@@ -116,7 +116,7 @@ def backup(path: Path, label: str) -> Path | None:
 def managed_handler(agent: str, action: str) -> dict[str, Any]:
     return {
         "type": "command",
-        "command": f'"$HOME/.local/bin/mins-agent-register" {agent} {action}',
+        "command": f'"$HOME/.local/bin/nv-agent-register" {agent} {action}',
         "timeout": 3,
     }
 

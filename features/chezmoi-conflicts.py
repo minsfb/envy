@@ -19,13 +19,13 @@ from typing import Any, TextIO
 
 HOME = Path.home().resolve()
 STATE_HOME = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
-STATE_ROOT = STATE_HOME / "mins-env" / "chezmoi-merges"
+STATE_ROOT = STATE_HOME / "envy" / "chezmoi-merges"
 INDEX_PATH = STATE_ROOT / "index.json"
 BASE_ROOT = STATE_ROOT / "bases"
-MINS_ENV_ROOT = Path(
-    os.environ.get("MINS_ENV_ROOT", Path(__file__).resolve().parent.parent)
+ENVY_ROOT = Path(
+    os.environ.get("ENVY_ROOT", Path(__file__).resolve().parent.parent)
 ).resolve()
-ENGINE = MINS_ENV_ROOT / "lib" / "smart_merge.py"
+ENGINE = ENVY_ROOT / "lib" / "smart_merge.py"
 CHEZMOI = shutil.which("chezmoi")
 
 
@@ -243,9 +243,9 @@ def overlay_current(
 
 
 def agent_policy() -> str:
-    if os.environ.get("MINS_SMART_MERGE_AGENT_COMMAND"):
+    if os.environ.get("ENVY_SMART_MERGE_AGENT_COMMAND"):
         return "auto"
-    configured = os.environ.get("MINS_SMART_MERGE_AGENT", "none")
+    configured = os.environ.get("ENVY_SMART_MERGE_AGENT", "none")
     return configured if configured in {"none", "auto", "claude"} else "none"
 
 
@@ -275,7 +275,7 @@ def planned_merge(
                 previous = candidate
 
     suffix = target.suffix
-    with tempfile.TemporaryDirectory(prefix="mins-chezmoi-merge.") as temporary:
+    with tempfile.TemporaryDirectory(prefix="envy-chezmoi-merge.") as temporary:
         root = Path(temporary)
         local_path = root / f"LOCAL{suffix}"
         incoming_path = root / f"INCOMING{suffix}"
@@ -376,7 +376,7 @@ def prompt_action(
         print(
             "      If enabled and needed, the agent receives isolated copies of this file."
         )
-    print("  [S]kip leaves the target unchanged and mins-env visibly drifted.")
+    print("  [S]kip leaves the target unchanged and envy visibly drifted.")
     while True:
         print(
             "Action [D]iff/[O]verwrite/[A]ll overwrite/[M]erge/[S]kip/[Q]uit: ",

@@ -1,4 +1,4 @@
-# Portable Alacritty defaults managed by mins-env.
+# Portable Alacritty defaults managed by envy.
 
 [general]
 # Allows optional terminal adapters to create native windows.
@@ -35,7 +35,7 @@ duration = 150
 color = "#f0c674"
 # BEL is the transport across remote shells and tmux. The local helper turns it
 # into a macOS notification only while the agent-notifications feature is on.
-command = { program = "/bin/sh", args = ["-c", "exec \"$HOME/.local/bin/mins-terminal-notify\""] }
+command = { program = "/bin/sh", args = ["-c", "exec \"$HOME/.local/bin/nv-terminal-notify\""] }
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 [colors.primary]

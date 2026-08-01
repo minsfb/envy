@@ -20,7 +20,7 @@ COMMANDS = {
 
 def usage() -> int:
     print(
-        "usage: mins-agent-resume [--print-command] v1 {claude|codex|pi} SESSION_ID",
+        "usage: nv-agent-resume [--print-command] v1 {claude|codex|pi} SESSION_ID",
         file=sys.stderr,
     )
     return 2
@@ -41,7 +41,7 @@ def main() -> int:
     command = COMMANDS[agent](session_id)
     executable = shutil.which(command[0])
     if not executable:
-        print(f"mins-agent-resume: command not found: {command[0]}", file=sys.stderr)
+        print(f"nv-agent-resume: command not found: {command[0]}", file=sys.stderr)
         return 127
     command[0] = executable
 

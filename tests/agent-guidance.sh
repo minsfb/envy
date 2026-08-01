@@ -21,4 +21,4 @@ canonical="$DEST/.config/agent-guidance/AGENTS.md"
 # shellcheck disable=SC2088 # Assert the literal path documented for users.
 grep -qF '~/.config/agent-guidance/rules/' "$canonical" \
   || fail 'bundle guidance extension point is missing'
-echo 'mins-env agent guidance tests passed'
+echo 'envy agent guidance tests passed'

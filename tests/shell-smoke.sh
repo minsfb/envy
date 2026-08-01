@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE="$ROOT/chezmoi"
 TEMP="$(mktemp -d)"
-SOCKET_NAME="mins-env-smoke-$$"
+SOCKET_NAME="envy-smoke-$$"
 trap 'tmux -L "$SOCKET_NAME" kill-server >/dev/null 2>&1 || true; rm -rf "$TEMP"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
@@ -19,7 +19,7 @@ chezmoi execute-template --source "$SOURCE" --override-data "$OVERRIDE" \
 zsh -n "$TEMP/zshrc"
 bash -n "$TEMP/bashrc"
 grep -q 'shell.d' "$TEMP/zshrc" || fail 'zsh bundle fragment hook is missing'
-grep -q 'MINS_SECRETS_FILE' "$TEMP/zshrc" || fail 'configured secrets hook is missing'
+grep -q 'ENVY_SECRETS_FILE' "$TEMP/zshrc" || fail 'configured secrets hook is missing'
 
 mkdir -p "$TEMP/home"
 cp "$TEMP/bashrc" "$TEMP/home/.bashrc"
@@ -29,7 +29,7 @@ cat >"$TEMP/bin/zsh" <<'EOF'
 echo handoff >"$HANDOFF_MARKER"
 EOF
 chmod +x "$TEMP/bin/zsh"
-MINS_BASH_EXECD='' MINS_NO_ZSH='' HANDOFF_MARKER="$TEMP/handoff" HOME="$TEMP/home" \
+ENVY_BASH_EXECD='' ENVY_NO_ZSH='' HANDOFF_MARKER="$TEMP/handoff" HOME="$TEMP/home" \
   PATH="$TEMP/bin:/usr/bin:/bin" bash --noprofile -ic 'exit 99' \
   </dev/null >/dev/null 2>&1 || true
 [[ -f "$TEMP/handoff" ]] || fail 'interactive Bash did not hand off to zsh'
@@ -51,4 +51,4 @@ if command -v tmux >/dev/null 2>&1; then
     || fail 'resume view footer does not show the base session'
 fi
 
-echo 'mins-env shell smoke tests passed'
+echo 'envy shell smoke tests passed'

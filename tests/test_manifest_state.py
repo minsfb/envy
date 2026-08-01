@@ -42,7 +42,7 @@ class ManifestStateTest(unittest.TestCase):
                 }
             },
         }
-        path = root / "mins-env.bundle.json"
+        path = root / "envy.bundle.json"
         path.write_text(json.dumps(value), encoding="utf-8")
         return path
 
@@ -50,7 +50,7 @@ class ManifestStateTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             bundle_root = Path(temporary).resolve() / "bundle"
             self.write_bundle(bundle_root)
-            value = manifest_module.compose(ROOT / "mins-env.json", [str(bundle_root)])
+            value = manifest_module.compose(ROOT / "envy.json", [str(bundle_root)])
             self.assertIn("example", value["features"])
             self.assertEqual(value["features"]["example"]["_origin"], "example-bundle")
             self.assertEqual(value["environment"]["EXAMPLE_ROOT"], str(bundle_root))
@@ -64,19 +64,19 @@ class ManifestStateTest(unittest.TestCase):
             bundle_root = Path(temporary) / "bundle"
             path = self.write_bundle(bundle_root, feature="path")
             with self.assertRaises(manifest_module.ManifestError):
-                manifest_module.compose(ROOT / "mins-env.json", [str(path)])
+                manifest_module.compose(ROOT / "envy.json", [str(path)])
 
     def test_bundle_cannot_replace_runtime_environment(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             bundle_root = Path(temporary) / "bundle"
             path = self.write_bundle(bundle_root)
             value = json.loads(path.read_text(encoding="utf-8"))
-            value["environment"] = {"MINS_ENV_ROOT": "/tmp/replaced"}
+            value["environment"] = {"ENVY_ROOT": "/tmp/replaced"}
             path.write_text(json.dumps(value), encoding="utf-8")
             with self.assertRaisesRegex(
                 manifest_module.ManifestError, "reserved environment key"
             ):
-                manifest_module.compose(ROOT / "mins-env.json", [str(path)])
+                manifest_module.compose(ROOT / "envy.json", [str(path)])
 
     def test_portable_bundle_facts_and_containment(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -97,7 +97,7 @@ class ManifestStateTest(unittest.TestCase):
             value["facts"] = {"run": "facts.sh"}
             path.write_text(json.dumps(value), encoding="utf-8")
 
-            composed = manifest_module.compose(ROOT / "mins-env.json", [str(path)])
+            composed = manifest_module.compose(ROOT / "envy.json", [str(path)])
             resolved = facts_module.merge(composed)
             self.assertEqual(resolved["platform"], "linux-team")
             self.assertEqual(
@@ -111,7 +111,7 @@ class ManifestStateTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 manifest_module.ManifestError, "escapes its package root"
             ):
-                manifest_module.compose(ROOT / "mins-env.json", [str(path)])
+                manifest_module.compose(ROOT / "envy.json", [str(path)])
 
     def test_handler_exit_two_is_not_missing_handler(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -119,15 +119,15 @@ class ManifestStateTest(unittest.TestCase):
             self.write_bundle(bundle_root, exit_code=2)
             script = r"""
 set +e
-MINS_ENV_ROOT="$1"
-source "$MINS_ENV_ROOT/lib/features.sh"
-mins_manifest_init "$2" || exit
-mins_run_feature_handler example converge
+ENVY_ROOT="$1"
+source "$ENVY_ROOT/lib/features.sh"
+nv_manifest_init "$2" || exit
+nv_run_feature_handler example converge
 handler_rc=$?
-mins_run_feature_handler example remove
+nv_run_feature_handler example remove
 missing_rc=$?
-printf '%s %s %s\n' "$handler_rc" "$missing_rc" "$MINS_HANDLER_UNAVAILABLE"
-mins_manifest_cleanup
+printf '%s %s %s\n' "$handler_rc" "$missing_rc" "$ENVY_HANDLER_UNAVAILABLE"
+nv_manifest_cleanup
 """
             process = subprocess.run(
                 ["bash", "-c", script, "_", str(ROOT), str(bundle_root)],
@@ -160,9 +160,9 @@ mins_manifest_cleanup
                     },
                 },
             }
-            path = bundle_root / "mins-env.bundle.json"
+            path = bundle_root / "envy.bundle.json"
             path.write_text(json.dumps(definition), encoding="utf-8")
-            composed = manifest_module.compose(ROOT / "mins-env.json", [str(path)])
+            composed = manifest_module.compose(ROOT / "envy.json", [str(path)])
             names = list(composed["features"])
             self.assertLess(names.index("provider"), names.index("consumer"))
 
@@ -171,12 +171,12 @@ mins_manifest_cleanup
             with self.assertRaisesRegex(
                 manifest_module.ManifestError, "dependency cycle"
             ):
-                manifest_module.compose(ROOT / "mins-env.json", [str(path)])
+                manifest_module.compose(ROOT / "envy.json", [str(path)])
 
     def test_smart_merge_is_a_core_prerequisite_for_chezmoi(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            composed = manifest_module.compose(ROOT / "mins-env.json", [])
+            composed = manifest_module.compose(ROOT / "envy.json", [])
             features = composed["features"]
             names = list(features)
 
@@ -205,7 +205,7 @@ mins_manifest_cleanup
     def test_v2_alias_and_detached_feature_return(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            core_value = manifest_module.compose(ROOT / "mins-env.json", [])
+            core_value = manifest_module.compose(ROOT / "envy.json", [])
             core_manifest = root / "core.json"
             core_manifest.write_text(json.dumps(core_value), encoding="utf-8")
             state_path = root / "state.json"
@@ -240,7 +240,7 @@ mins_manifest_cleanup
             bundle_root = root / "bundle"
             self.write_bundle(bundle_root)
             composed = manifest_module.compose(
-                ROOT / "mins-env.json", [str(bundle_root)]
+                ROOT / "envy.json", [str(bundle_root)]
             )
             composed_path = root / "composed.json"
             composed_path.write_text(json.dumps(composed), encoding="utf-8")

@@ -5,10 +5,10 @@ const events = new Set([
   "session.idle",
 ])
 
-export const MinsAgentNotifications = async () => ({
+export const NvAgentNotifications = async () => ({
   event: async ({ event }) => {
     if (!events.has(event.type) || !process.env.HOME) return
-    const helper = `${process.env.HOME}/.local/bin/mins-agent-notify`
+    const helper = `${process.env.HOME}/.local/bin/nv-agent-notify`
     if (!(await Bun.file(helper).exists())) return
     await Bun.spawn([helper, "metacode"], {
       stdin: "ignore",

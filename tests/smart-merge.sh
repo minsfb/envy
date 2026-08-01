@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENGINE="$ROOT/bin/smart-merge"
-GIT_ADAPTER="$ROOT/bin/smart-merge-git"
-GIT_SETUP="$ROOT/bin/smart-merge-git-setup"
+ENGINE="$ROOT/bin/nv-smart-merge"
+GIT_ADAPTER="$ROOT/bin/nv-smart-merge-git"
+GIT_SETUP="$ROOT/bin/nv-smart-merge-git-setup"
 TEMP="$(mktemp -d)"
 trap 'rm -rf "$TEMP"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -40,17 +40,17 @@ set -euo pipefail
 printf 'resolved\n' >"$4"
 EOF
 chmod +x "$TEMP/fake-agent"
-MINS_SMART_MERGE_AGENT_COMMAND="$TEMP/fake-agent" \
+ENVY_SMART_MERGE_AGENT_COMMAND="$TEMP/fake-agent" \
   "$ENGINE" --local "$TEMP/agent/local" --incoming "$TEMP/agent/incoming" \
   --output "$TEMP/agent/result" --agent auto >/dev/null
 grep -q '^resolved$' "$TEMP/agent/result" || fail 'explicit agent command did not run'
 
 mkdir -p "$TEMP/git-home"
 HOME="$TEMP/git-home" "$GIT_SETUP"
-[[ "$(HOME="$TEMP/git-home" git config --global merge.tool)" == smart-merge ]] \
+[[ "$(HOME="$TEMP/git-home" git config --global merge.tool)" == nv-smart-merge ]] \
   || fail 'Git smart-merge tool was not configured'
-git_command="$(HOME="$TEMP/git-home" git config --global mergetool.smart-merge.cmd)"
-[[ "$git_command" == *smart-merge-git* ]] || fail 'Git adapter command is incorrect'
+git_command="$(HOME="$TEMP/git-home" git config --global mergetool.nv-smart-merge.cmd)"
+[[ "$git_command" == *nv-smart-merge-git* ]] || fail 'Git adapter command is incorrect'
 
 printf 'a\nb\nc\n' > "$TEMP/text/git-base"
 printf 'local-a\nb\nc\n' > "$TEMP/text/git-local"

@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "id": "mins-env-core",
+  "id": "envy-core",
   "bundle_version": "0.1.0",
   "presets": {
     "core": "Required merge, managed-file, toolchain, and path foundation",
@@ -65,7 +65,7 @@
       "remove": {"run": "features/mise.sh", "args": ["remove"]}
     },
     "path": {
-      "description": "mins-env commands and configured command roots on PATH",
+      "description": "envy commands and configured command roots on PATH",
       "tier": "core",
       "default_enabled": true,
       "scope": {"global": true},
@@ -73,7 +73,7 @@
       "verify": {"run": "features/path.sh", "args": ["verify"]},
       "doctor": {"run": "features/path.sh", "args": ["doctor"]},
       "remove": {"run": "features/path.sh", "args": ["remove"]},
-      "env": {"PATH+": "${MINS_ENV_ROOT}/bin"}
+      "env": {"PATH+": "${ENVY_ROOT}/bin"}
     },
     "terminal": {
       "description": "Zsh and tmux everywhere, with Alacritty on macOS",

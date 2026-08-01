@@ -19,22 +19,22 @@ from typing import Any
 HOME = Path.home()
 CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 STATE_HOME = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
-MARKER = CONFIG_HOME / "mins-env" / "agent-notifications.enabled"
-STATE_ROOT = STATE_HOME / "mins-env" / "agent-notifications"
-BACKUP_ROOT = STATE_HOME / "mins-env" / "backups" / "agent-notifications"
+MARKER = CONFIG_HOME / "envy" / "agent-notifications.enabled"
+STATE_ROOT = STATE_HOME / "envy" / "agent-notifications"
+BACKUP_ROOT = STATE_HOME / "envy" / "backups" / "agent-notifications"
 OWNERSHIP = STATE_ROOT / "ownership.json"
-HOOK_TOKEN = "mins-agent-notify"
+HOOK_TOKEN = "nv-agent-notify"
 SUPPORTED_ADAPTERS = {"claude", "codex", "metacode", "pi"}
 
 HOOK_FILES = {
     "claude": HOME / ".claude" / "settings.json",
     "codex": HOME / ".codex" / "hooks.json",
 }
-HELPERS = ("mins-agent-notify", "mins-terminal-notify")
+HELPERS = ("nv-agent-notify", "nv-terminal-notify")
 METACODE_PLUGIN = (
-    CONFIG_HOME / "opencode" / "plugins" / "mins-agent-notifications.js"
+    CONFIG_HOME / "opencode" / "plugins" / "nv-agent-notifications.js"
 )
-PI_EXTENSION = HOME / ".pi" / "agent" / "extensions" / "mins-tmux-session.ts"
+PI_EXTENSION = HOME / ".pi" / "agent" / "extensions" / "nv-tmux-session.ts"
 ALACRITTY_CONFIG = CONFIG_HOME / "alacritty" / "alacritty.toml"
 
 
@@ -56,9 +56,9 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def settings() -> tuple[set[str], str]:
-    manifest_path = os.environ.get("MINS_ENV_MANIFEST")
+    manifest_path = os.environ.get("ENVY_MANIFEST")
     if not manifest_path:
-        raise FeatureError("MINS_ENV_MANIFEST is required")
+        raise FeatureError("ENVY_MANIFEST is required")
     manifest = load_json(Path(manifest_path))
     value = manifest.get("settings", {}).get("agent_notifications", {})
     if not isinstance(value, dict):
@@ -120,7 +120,7 @@ def handler(*adapters: str) -> dict[str, Any]:
     arguments = " ".join(adapters)
     return {
         "type": "command",
-        "command": f'"$HOME/.local/bin/mins-agent-notify" {arguments}',
+        "command": f'"$HOME/.local/bin/nv-agent-notify" {arguments}',
         "timeout": 3,
     }
 
@@ -217,7 +217,7 @@ def assets_missing(adapters: set[str]) -> list[Path]:
         missing.append(PI_EXTENSION)
     if sys.platform == "darwin" and (
         not ALACRITTY_CONFIG.is_file()
-        or "mins-terminal-notify"
+        or "nv-terminal-notify"
         not in ALACRITTY_CONFIG.read_text(encoding="utf-8")
     ):
         missing.append(ALACRITTY_CONFIG)

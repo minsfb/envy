@@ -1,5 +1,5 @@
 # ~/.config/mise/config.toml — managed by chezmoi
-# (source: mins-util/mins-env/chezmoi/dot_config/mise/config.toml.tmpl)
+# (source: envy/chezmoi/dot_config/mise/config.toml.tmpl)
 #
 # Global tool versions. Per-project overrides go in a repo-local `mise.toml`.
 # After changing: `chezmoi apply` then `mise install`.
@@ -23,7 +23,7 @@ sops   = "3.10.2"                     # structured secrets encrypted to age reci
 #   1. uncomment the line below
 #   2. mise install android-sdk
 #   3. yes | "$(mise where android-sdk)/cmdline-tools/latest/bin/sdkmanager" --licenses
-# Until then, enable the optional mins-env `adb` feature to select an existing SDK.
+# Until then, enable the optional envy `adb` feature to select an existing SDK.
 # "android-sdk" = "latest"
 
 [settings]

@@ -1,6 +1,6 @@
-# mins-env
+# envy
 
-`mins-env` is a portable, stateful developer-environment manager built around
+`envy` is a portable, stateful developer-environment manager built around
 Chezmoi and Mise. It selects features once, converges them repeatedly, verifies
 drift, diagnoses focused areas, and conservatively removes only state it owns.
 
@@ -14,25 +14,25 @@ drift, diagnoses focused areas, and conservatively removes only state it owns.
 - zsh and tmux for the recommended terminal preset
 
 Android SDKs, agent CLIs, and terminal applications remain externally supplied.
-mins-env does not redistribute them.
+envy does not redistribute them.
 
 ## Install
 
 ```bash
-./bin/mins-env install --preset recommended
+./bin/envy install --preset recommended
 ```
 
 Interactive installation selects recommended and optional features. For
 automation, choose `--preset core|recommended` or use `--yes`.
 
 ```bash
-mins-env install --reconfigure
-mins-env upgrade
-mins-env upgrade --only chezmoi,mise
-mins-env status
-mins-env verify
-mins-env doctor tmux-persistence --verbose
-mins-env uninstall --yes
+envy install --reconfigure
+envy upgrade
+envy upgrade --only chezmoi,mise
+envy status
+envy verify
+envy doctor tmux-persistence --verbose
+envy uninstall --yes
 ```
 
 `core` and `recommended` are selection presets. They are not environment
@@ -44,7 +44,7 @@ One or more trusted bundles can add features, managed-file source trees,
 agent-asset manifests, settings, and environment facts:
 
 ```bash
-mins-env --bundle /path/to/team-bundle install --preset recommended
+envy --bundle /path/to/team-bundle install --preset recommended
 ```
 
 Bundles are never discovered automatically. Their IDs, versions, paths, hashes,
@@ -57,17 +57,17 @@ resources, and feature PATH entries must remain inside its package root. A
 structured `facts` provider may report a host platform hierarchy and ephemeral
 runtime environment facts as JSON; the core validates them without shell
 evaluation. Explicit user environment overrides retain precedence.
-`MINS_ENV_NETWORK_PROXY` is applied only by core providers that fetch public
+`ENVY_NETWORK_PROXY` is applied only by core providers that fetch public
 dependencies; explicit HTTP(S) proxy variables win, and bundle/internal
 handlers do not inherit it automatically.
 
-A bundle is a directory containing `mins-env.bundle.json`. Handlers use
+A bundle is a directory containing `envy.bundle.json`. Handlers use
 structured `run`/`command` plus `args` fields and resolve relative to the owning
 manifest; manifest strings are never evaluated as shell source.
 
 Chezmoi sources are assembled in order into an owned working tree. Exact source
 path collisions are rejected. Shared top-level shell profiles instead load
-lexically ordered bundle fragments from `~/.config/mins-env/shell.d`.
+lexically ordered bundle fragments from `~/.config/envy/shell.d`.
 
 ## Features
 
@@ -87,20 +87,20 @@ lexically ordered bundle fragments from `~/.config/mins-env/shell.d`.
 ### Smart merge and managed files
 
 The core `smart-merge` feature is initialized before Chezmoi and is an explicit
-prerequisite for managed-file convergence. `bin/smart-merge` handles identical
+prerequisite for managed-file convergence. `bin/nv-smart-merge` handles identical
 and one-sided changes, additive or three-way JSON, textual three-way merges,
 and an optional external agent. Agent fallback is disabled by default. Enable
-it explicitly with `--agent`, `MINS_SMART_MERGE_AGENT`, or
-`MINS_SMART_MERGE_AGENT_COMMAND`.
+it explicitly with `--agent`, `ENVY_SMART_MERGE_AGENT`, or
+`ENVY_SMART_MERGE_AGENT_COMMAND`.
 
-`bin/smart-merge-git` is the provider-neutral Git mergetool adapter. Install it
-explicitly with `bin/smart-merge-git-setup`; its agent policy also defaults to
+`bin/nv-smart-merge-git` is the provider-neutral Git mergetool adapter. Install it
+explicitly with `bin/nv-smart-merge-git-setup`; its agent policy also defaults to
 `none`.
 
 The Chezmoi conflict broker presents Enter-confirmed diff, overwrite, merge,
 skip, and quit actions. Accepted local merges retain a managed base and hashes
-under `~/.local/state/mins-env/chezmoi-merges` for later three-way updates.
-`bin/managed-json` exposes the additive JSON policy for application settings.
+under `~/.local/state/envy/chezmoi-merges` for later three-way updates.
+`bin/nv-managed-json` exposes the additive JSON policy for application settings.
 
 ### Tmux and agent sessions
 
@@ -142,7 +142,7 @@ Adapters and focus behavior are manifest settings:
 ```
 
 `condition` accepts `unfocused` or `always`. Run
-`mins-agent-notify --test` inside the target pane to test raw BEL delivery.
+`nv-agent-notify --test` inside the target pane to test raw BEL delivery.
 
 ### Secrets
 
@@ -152,7 +152,7 @@ legacy string sources are rejected. Enable the feature before generating or
 transferring its identity:
 
 ```sh
-mins-env install --reconfigure
+envy install --reconfigure
 # Select secrets, then let the install converge its dependencies.
 ```
 
@@ -208,19 +208,19 @@ built-in SSH/SCP transfer instead of manually creating directories or fixing
 permissions:
 
 ```sh
-mins-env secrets push-key user@host
+envy secrets push-key user@host
 # Or, from a new machine:
-mins-env secrets pull-key user@source-host
+envy secrets pull-key user@source-host
 ```
 
-`push-key` and `pull-key` refuse to run unless the local mins-env installation
+`push-key` and `pull-key` refuse to run unless the local envy installation
 has the secrets feature enabled and its managed SOPS+age toolchain is current.
 This check happens before any SSH connection; a missing local identity is valid
 only for `pull-key`. Command help remains available before installation. If the
 toolchain is incomplete, repair it with:
 
 ```sh
-mins-env upgrade --only chezmoi,mise --force
+envy upgrade --only chezmoi,mise --force
 ```
 
 Both transfer commands validate the software identity, inspect the relevant key
@@ -241,8 +241,8 @@ either key-transfer command. Once it is available at the receiving end, add
 pull:
 
 ```sh
-mins-env secrets push-key --restore user@host
-mins-env secrets pull-key --restore user@source-host
+envy secrets push-key --restore user@host
+envy secrets pull-key --restore user@source-host
 ```
 
 This copies neither the plaintext target nor any other secrets. Use Git, a
@@ -251,8 +251,8 @@ ciphertext. After the identity and ciphertext are present, finish and verify the
 local restore with:
 
 ```sh
-mins-env upgrade --only secrets --force
-mins-env doctor secrets --verbose
+envy upgrade --only secrets --force
+envy doctor secrets --verbose
 ```
 
 Use `binary` for an existing shell fragment because it round-trips `export`,
@@ -262,23 +262,23 @@ comments, and other shell syntax byte-for-byte. Use `dotenv` only for a strict
 Identity files, encrypted sources, and the target must be regular files;
 symlinks are refused. Identity permissions must exclude group and other access
 on Unix. SOPS decrypts through a captured pipe, and installation is atomic with
-mode `0600` on Unix. Windows targets inherit their directory ACL; mins-env does
+mode `0600` on Unix. Windows targets inherit their directory ACL; envy does
 not currently rewrite Windows ACLs. Contents and private identities are never
-printed, backed up, or stored in mins-env state. Uninstall retains the user-owned
+printed, backed up, or stored in envy state. Uninstall retains the user-owned
 target, identity, and encrypted sources. The encrypted source is protected at
 rest; the restored target is a plaintext runtime file protected by filesystem
 permissions, not an in-memory-only secret agent.
-`mins-env doctor secrets --verbose` performs a real decryption and comparison
+`envy doctor secrets --verbose` performs a real decryption and comparison
 check.
 
 ## State and ownership
 
 | Path | Purpose |
 | --- | --- |
-| `~/.config/mins-env/state.json` | Schema-v3 selections, origins, bundle hashes, platform hierarchy, and results |
-| `~/.config/mins-env/init-sh.env` | Generated environment sourced by managed shells |
-| `~/.local/state/mins-env/` | Logs, backups, merge bases, agent metadata, and ownership ledgers |
-| `~/.local/share/mins-env/chezmoi-source` | Composed, non-overlapping Chezmoi working tree |
+| `~/.config/envy/state.json` | Schema-v3 selections, origins, bundle hashes, platform hierarchy, and results |
+| `~/.config/envy/init-sh.env` | Generated environment sourced by managed shells |
+| `~/.local/state/envy/` | Logs, backups, merge bases, agent metadata, and ownership ledgers |
+| `~/.local/share/envy/chezmoi-source` | Composed, non-overlapping Chezmoi working tree |
 
 Removed bundles are retained as detached feature state so reattaching a bundle
 does not silently lose prior optional selections.
@@ -287,7 +287,7 @@ does not silently lose prior optional selections.
 
 ### Adding A Feature
 
-Add generic, portable features to `mins-env.json`; keep organization-, team-,
+Add generic, portable features to `envy.json`; keep organization-, team-,
 or machine-specific features in a bundle. Feature IDs are unique, lowercase
 kebab-case names. Each definition requires a description and a
 `core`, `recommended`, or `optional` tier, and may declare platform scope,
@@ -308,10 +308,10 @@ dependencies, environment values, and structured lifecycle handlers:
 }
 ```
 
-Handlers run from their owning package root with `MINS_FEATURE` and
-`MINS_FEATURE_ROOT` set. Convergence must be idempotent, verification must be
+Handlers run from their owning package root with `ENVY_FEATURE` and
+`ENVY_FEATURE_ROOT` set. Convergence must be idempotent, verification must be
 read-only, diagnosis should explain actionable drift, and removal must delete
-only owned state while honoring `MINS_ENV_DRY_RUN` and `MINS_ENV_PURGE`.
+only owned state while honoring `ENVY_DRY_RUN` and `ENVY_PURGE`.
 
 Add non-core defaults to `recommended_features` when the recommended preset
 should select them. Document the feature in the table above and add a focused
@@ -319,13 +319,13 @@ test.
 
 ### Adding A Bundle
 
-A bundle is a trusted directory rooted by `mins-env.bundle.json`. Version-1
+A bundle is a trusted directory rooted by `envy.bundle.json`. Version-1
 bundles can contribute features, Chezmoi source trees, agent-asset manifests,
 settings, environment facts, and non-reserved environment values:
 
 ```text
 team-bundle/
-|-- mins-env.bundle.json
+|-- envy.bundle.json
 |-- features/
 |-- chezmoi/
 `-- assets/
@@ -357,8 +357,8 @@ select. Validate composition before lifecycle testing:
 
 ```bash
 python3 lib/manifest.py compose \
-  mins-env.json /path/to/team-bundle/mins-env.bundle.json >/dev/null
-./bin/mins-env --bundle /path/to/team-bundle install \
+  envy.json /path/to/team-bundle/envy.bundle.json >/dev/null
+./bin/envy --bundle /path/to/team-bundle install \
   --preset recommended --dry-run
 ```
 

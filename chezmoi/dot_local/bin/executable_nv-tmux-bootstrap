@@ -2,15 +2,15 @@
 # Load pinned tmux persistence plugins and start one guarded restore attempt.
 set -u
 
-marker="${XDG_CONFIG_HOME:-$HOME/.config}/mins-env/tmux-persistence.enabled"
+marker="${XDG_CONFIG_HOME:-$HOME/.config}/envy/tmux-persistence.enabled"
 [[ -f "$marker" ]] || exit 0
 
-plugin_root="$HOME/.local/share/mins-tmux"
+plugin_root="$HOME/.local/share/envy/tmux"
 resurrect="$plugin_root/tmux-resurrect"
 continuum="$plugin_root/tmux-continuum"
-snapshot="$HOME/.local/bin/mins-tmux-snapshot"
-save_tool="$HOME/.local/bin/mins-tmux-save"
-restore_tool="$HOME/.local/bin/mins-tmux-restore"
+snapshot="$HOME/.local/bin/nv-tmux-snapshot"
+save_tool="$HOME/.local/bin/nv-tmux-save"
+restore_tool="$HOME/.local/bin/nv-tmux-restore"
 
 [[ -x "$resurrect/resurrect.tmux" && -x "$continuum/continuum.tmux" ]] || exit 0
 [[ -x "$snapshot" && -x "$save_tool" && -x "$restore_tool" ]] || exit 0
@@ -25,16 +25,16 @@ chmod 700 "$resurrect_dir"
 printf -v snapshot_command '%q' "$snapshot"
 printf -v save_command '%q quiet' "$save_tool"
 
-tmux set-option -gq @mins_tmux_persistence 1
+tmux set-option -gq @nv_tmux_persistence 1
 tmux set-option -gq @resurrect-dir "$resurrect_dir"
-tmux set-option -gq @resurrect-processes 'mins-agent-resume'
+tmux set-option -gq @resurrect-processes 'nv-agent-resume'
 tmux set-option -gq @resurrect-hook-post-save-layout "$snapshot_command"
 tmux set-option -gq @resurrect-save-script-path "$resurrect/scripts/save.sh"
 tmux set-option -gq @resurrect-restore-script-path "$resurrect/scripts/restore.sh"
 
 "$resurrect/resurrect.tmux"
 
-tmux set-option -gq @mins_resurrect-save-script "$resurrect/scripts/save.sh"
+tmux set-option -gq @nv_resurrect-save-script "$resurrect/scripts/save.sh"
 tmux set-option -gq @resurrect-save-script-path "$save_tool"
 tmux bind-key C-s run-shell "$save_tool"
 

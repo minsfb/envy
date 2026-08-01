@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify or select immutable commits for mins-env-owned Git externals."""
+"""Verify or select immutable commits for envy-owned Git externals."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def main() -> int:
             verify_one(item, converge=action == "converge")
         return 0
     except (DependencyError, OSError, json.JSONDecodeError) as error:
-        print(f"mins-env dependencies: {error}", file=sys.stderr)
+        print(f"envy dependencies: {error}", file=sys.stderr)
         return 1
 
 

@@ -1,6 +1,6 @@
 # Third-party dependencies
 
-mins-env does not vendor or redistribute the tools and plugins below. It invokes
+envy does not vendor or redistribute the tools and plugins below. It invokes
 externally installed Chezmoi, Mise, zsh, tmux, Alacritty, Git, Python, Bash, and
 Android platform tools under their respective licenses.
 

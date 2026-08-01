@@ -8,7 +8,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 HOME_DIR="$TEMP/home"
 ASSETS="$TEMP/assets"
-mkdir -p "$HOME_DIR/.config/mins-env" "$ASSETS/extra/example"
+mkdir -p "$HOME_DIR/.config/envy" "$ASSETS/extra/example"
 cat >"$ASSETS/extra/example/SKILL.md" <<'EOF'
 ---
 name: example
@@ -29,7 +29,7 @@ cat >"$ASSETS/manifest.json" <<EOF
   ]
 }
 EOF
-cat >"$HOME_DIR/.config/mins-env/state.json" <<'EOF'
+cat >"$HOME_DIR/.config/envy/state.json" <<'EOF'
 {
   "schema_version": 3,
   "installed": true,
@@ -50,9 +50,9 @@ EOF
 
 ENVIRONMENT=(
   HOME="$HOME_DIR"
-  MINS_PLATFORM=linux
-  MINS_ENV_MANIFEST="$TEMP/resolved.json"
-  MINS_ENV_STATE_FILE="$HOME_DIR/.config/mins-env/state.json"
+  ENVY_PLATFORM=linux
+  ENVY_MANIFEST="$TEMP/resolved.json"
+  ENVY_STATE_FILE="$HOME_DIR/.config/envy/state.json"
 )
 env "${ENVIRONMENT[@]}" "$ROOT/features/agent-assets.py" converge >/dev/null
 [[ -L "$HOME_DIR/.claude/skills/handoff" ]] || fail 'core Claude skill was not linked'

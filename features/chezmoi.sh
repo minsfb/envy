@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Chezmoi provider for mins-env: converge, conservatively remove, or diagnose.
+# Chezmoi provider for envy: converge, conservatively remove, or diagnose.
 set -euo pipefail
 
 ACTION="${1:-converge}"
-MINS_ENV_ROOT="${MINS_ENV_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-SRC="${XDG_DATA_HOME:-$HOME/.local/share}/mins-env/chezmoi-source"
-CONFLICT_BROKER="$MINS_ENV_ROOT/features/chezmoi-conflicts.py"
-COMPOSER="$MINS_ENV_ROOT/lib/compose_chezmoi.py"
-STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/mins-env"
+ENVY_ROOT="${ENVY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SRC="${XDG_DATA_HOME:-$HOME/.local/share}/envy/chezmoi-source"
+CONFLICT_BROKER="$ENVY_ROOT/features/chezmoi-conflicts.py"
+COMPOSER="$ENVY_ROOT/lib/compose_chezmoi.py"
+STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/envy"
 BACKUP_ROOT="$STATE_ROOT/backups/chezmoi"
 # shellcheck source=lib/pkg.sh
-source "$MINS_ENV_ROOT/lib/pkg.sh"
+source "$ENVY_ROOT/lib/pkg.sh"
 
 export PATH="$HOME/.local/bin:$PATH"
 pkg_use_external_proxy
@@ -19,7 +19,7 @@ _compose_source() {
   local source
   local sources=()
   while IFS= read -r source; do [[ -n "$source" ]] && sources+=("$source"); done < <(
-    python3 "$MINS_ENV_ROOT/lib/manifest.py" resource "${MINS_ENV_MANIFEST:?}" chezmoi_sources
+    python3 "$ENVY_ROOT/lib/manifest.py" resource "${ENVY_MANIFEST:?}" chezmoi_sources
   )
   [[ -n "${sources[0]+set}" ]] || { echo "No chezmoi sources are configured" >&2; return 1; }
   python3 "$COMPOSER" "$SRC" "${sources[@]}"
@@ -81,10 +81,10 @@ _link_xdg_overrides() {
   local config_home="${XDG_CONFIG_HOME:-$HOME/.config}" data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
   if [[ "$config_home" != "$HOME/.config" ]]; then
     _link_owned_xdg_path "$HOME/.config/mise/config.toml" "$config_home/mise/config.toml"
-    _link_owned_xdg_path "$HOME/.config/mins-env/tmux-autoattach.sh" "$config_home/mins-env/tmux-autoattach.sh"
+    _link_owned_xdg_path "$HOME/.config/envy/tmux-autoattach.sh" "$config_home/envy/tmux-autoattach.sh"
   fi
   if [[ "$data_home" != "$HOME/.local/share" ]]; then
-    _link_owned_xdg_path "$HOME/.local/share/mins-zsh" "$data_home/mins-zsh"
+    _link_owned_xdg_path "$HOME/.local/share/envy/zsh" "$data_home/envy/zsh"
   fi
 }
 
@@ -97,15 +97,15 @@ _converge() {
   chezmoi init --source "$SRC"
   _capture_backups
   "$CONFLICT_BROKER" apply "$SRC"
-  if [[ "${MINS_ENV_SKIP_DEPENDENCY_PINS:-0}" != 1 ]]; then
-    python3 "$MINS_ENV_ROOT/lib/dependencies.py" converge
+  if [[ "${ENVY_SKIP_DEPENDENCY_PINS:-0}" != 1 ]]; then
+    python3 "$ENVY_ROOT/lib/dependencies.py" converge
   fi
   _link_xdg_overrides
   _record_created_files
-  if [[ -n "${MINS_ENV_STATE_FILE:-}" && -f "$MINS_ENV_STATE_FILE" ]]; then
+  if [[ -n "${ENVY_STATE_FILE:-}" && -f "$ENVY_STATE_FILE" ]]; then
     local encoded_backup_root
     encoded_backup_root="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$BACKUP_ROOT")"
-    python3 "$MINS_ENV_DIR/lib/state.py" "$MINS_ENV_STATE_FILE" set ownership.chezmoi.backup_root "$encoded_backup_root"
+    python3 "$ENVY_DIR/lib/state.py" "$ENVY_STATE_FILE" set ownership.chezmoi.backup_root "$encoded_backup_root"
   fi
 }
 
@@ -129,8 +129,8 @@ _remove() {
       if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then rm -f "$target"; fi
     done < "$BACKUP_ROOT/xdg-links.list"
   fi
-  if [[ "${MINS_ENV_PURGE:-false}" == true ]]; then
-    rm -rf "$HOME/.local/share/mins-zsh"
+  if [[ "${ENVY_PURGE:-false}" == true ]]; then
+    rm -rf "$HOME/.local/share/envy/zsh"
     if [[ -f "$STATE_ROOT/providers/chezmoi.installed" && "$(command -v chezmoi 2>/dev/null || true)" == "$HOME/.local/bin/chezmoi" ]]; then
       rm -f "$HOME/.local/bin/chezmoi"
     fi
@@ -143,8 +143,8 @@ _verify() {
   command -v chezmoi >/dev/null
   [[ -d "$SRC" ]]
   "$CONFLICT_BROKER" verify "$SRC"
-  if [[ "${MINS_ENV_SKIP_DEPENDENCY_PINS:-0}" != 1 ]]; then
-    python3 "$MINS_ENV_ROOT/lib/dependencies.py" verify
+  if [[ "${ENVY_SKIP_DEPENDENCY_PINS:-0}" != 1 ]]; then
+    python3 "$ENVY_ROOT/lib/dependencies.py" verify
   fi
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render mins-env status from one composed manifest and state read."""
+"""Render envy status from one composed manifest and state read."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def main() -> int:
         if not item.get("core")
     ]
 
-    print("mins-env status")
+    print("envy status")
     print(
         f"  Platform: {platform} | Preset: {state.get('preset', 'custom')} "
         f"| Checkout: {checkout}"

@@ -1,33 +1,33 @@
-# chezmoi-managed external repos — zsh plugins cloned into ~/.local/share/mins-zsh
+# chezmoi-managed external repos — zsh plugins cloned into ~/.local/share/envy/zsh
 # and sourced by dot_zshrc.tmpl. This is chezmoi's native way to vendor sourced
 # shell plugins (mise can't — they have no release binaries for ubi/aqua). Kept
 # pinned to reviewed release tags; no TPM/brew needed.
 # On hosts without github.com access the clone just fails and dot_zshrc's guarded
 # source skips it — no breakage.
 
-[".local/share/mins-zsh/zsh-autosuggestions"]
+[".local/share/envy/zsh/zsh-autosuggestions"]
     type = "git-repo"
     url = "https://github.com/zsh-users/zsh-autosuggestions.git"
     clone.args = ["--branch", "v0.7.1", "--depth", "1"]
 
-[".local/share/mins-zsh/zsh-syntax-highlighting"]
+[".local/share/envy/zsh/zsh-syntax-highlighting"]
     type = "git-repo"
     url = "https://github.com/zsh-users/zsh-syntax-highlighting.git"
     clone.args = ["--branch", "0.8.0", "--depth", "1"]
 
-[".local/share/mins-zsh/zsh-history-substring-search"]
+[".local/share/envy/zsh/zsh-history-substring-search"]
     type = "git-repo"
     url = "https://github.com/zsh-users/zsh-history-substring-search.git"
     clone.args = ["--branch", "v1.1.0", "--depth", "1"]
 
-# Pinned tmux persistence plugins. mins-env activates them only when the
+# Pinned tmux persistence plugins. envy activates them only when the
 # tmux-persistence feature marker exists; no runtime plugin manager is needed.
-[".local/share/mins-tmux/tmux-resurrect"]
+[".local/share/envy/tmux/tmux-resurrect"]
     type = "git-repo"
     url = "https://github.com/tmux-plugins/tmux-resurrect.git"
     clone.args = ["--branch", "v4.0.0", "--depth", "1"]
 
-[".local/share/mins-tmux/tmux-continuum"]
+[".local/share/envy/tmux/tmux-continuum"]
     type = "git-repo"
     url = "https://github.com/tmux-plugins/tmux-continuum.git"
     clone.args = ["--branch", "v3.1.0", "--depth", "1"]

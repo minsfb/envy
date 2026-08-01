@@ -141,14 +141,14 @@ def main() -> int:
     try:
         value = merge(load(Path(sys.argv[1])))
         pairs: list[str] = []
-        if "MINS_PLATFORM_OVERRIDE" not in os.environ and value.get("platform"):
-            pairs.extend(("MINS_PLATFORM_OVERRIDE", value["platform"]))
-        if "MINS_PLATFORM_HIERARCHY_OVERRIDE" not in os.environ and value.get(
+        if "ENVY_PLATFORM_OVERRIDE" not in os.environ and value.get("platform"):
+            pairs.extend(("ENVY_PLATFORM_OVERRIDE", value["platform"]))
+        if "ENVY_PLATFORM_HIERARCHY_OVERRIDE" not in os.environ and value.get(
             "hierarchy"
         ):
             pairs.extend(
                 (
-                    "MINS_PLATFORM_HIERARCHY_OVERRIDE",
+                    "ENVY_PLATFORM_HIERARCHY_OVERRIDE",
                     " ".join(value["hierarchy"]),
                 )
             )
@@ -158,7 +158,7 @@ def main() -> int:
         emit_nul(pairs)
         return 0
     except (FactError, OSError, json.JSONDecodeError) as error:
-        print(f"mins-env facts: {error}", file=sys.stderr)
+        print(f"envy facts: {error}", file=sys.stderr)
         return 1
 
 

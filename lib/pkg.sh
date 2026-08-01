@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Minimal package-provider boundary for mins-env. Source this file.
+# Minimal package-provider boundary for envy. Source this file.
 
 pkg_use_external_proxy() {
-  local proxy="${MINS_ENV_NETWORK_PROXY:-}"
+  local proxy="${ENVY_NETWORK_PROXY:-}"
   [[ -n "$proxy" ]] || return 0
   [[ -n "${HTTP_PROXY:-}" ]] || HTTP_PROXY="$proxy"
   [[ -n "${HTTPS_PROXY:-}" ]] || HTTPS_PROXY="$proxy"
@@ -28,6 +28,6 @@ pkg_ensure() {
     return 0
   fi
   echo "  $command_name is required but was not found." >&2
-  echo "  Install it with a trusted package manager, then rerun mins-env upgrade." >&2
+  echo "  Install it with a trusted package manager, then rerun envy upgrade." >&2
   return 1
 }
