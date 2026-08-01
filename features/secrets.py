@@ -264,6 +264,43 @@ def validate_identity(path: Path) -> None:
         raise SecretError(f"age identity file permissions are too open: {path}")
 
 
+def ensure_identity(identity_file: Path, age_keygen: str) -> bool:
+    """Generate a software age identity on first convergence."""
+    if identity_file.exists() or identity_file.is_symlink():
+        return False
+    identity_file.parent.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        os.chmod(identity_file.parent, 0o700)
+    process = subprocess.run(
+        [age_keygen, "-o", str(identity_file)],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=60,
+    )
+    if process.returncode != 0 or not identity_file.is_file():
+        raise SecretError("age-keygen could not generate a new identity")
+    if os.name != "nt":
+        os.chmod(identity_file, 0o600)
+    print(f"Generated a new age identity: {identity_file}")
+    return True
+
+
+def identity_recipient(identity_file: Path, age_keygen: str) -> str:
+    process = subprocess.run(
+        [age_keygen, "-y", str(identity_file)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        timeout=60,
+    )
+    recipient = process.stdout.strip().splitlines()[-1] if process.stdout.strip() else ""
+    if process.returncode != 0 or not recipient.startswith("age1"):
+        raise SecretError(f"could not derive the age recipient from {identity_file}")
+    return recipient
+
+
 def encrypted_source_contents(path: Path) -> bytes:
     contents = read_regular_file(path, nonempty=True)
     lowered = contents.lower()
@@ -1027,16 +1064,89 @@ def usable_sources(config: Configuration) -> tuple[EncryptedSource, ...]:
     return tuple(valid)
 
 
+def encrypt_target_to_source(
+    config: Configuration, source: EncryptedSource, sops: str, age_keygen: str
+) -> None:
+    recipient = identity_recipient(config.identity_file, age_keygen)
+    plaintext = read_regular_file(config.target, nonempty=True)
+    environment = os.environ.copy()
+    environment.pop("SOPS_AGE_KEY", None)
+    environment.pop("SOPS_AGE_KEY_CMD", None)
+    environment["SOPS_AGE_KEY_FILE"] = str(config.identity_file)
+    descriptor, snapshot = tempfile.mkstemp(prefix="envy-secrets.")
+    try:
+        if os.name != "nt":
+            os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(plaintext)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            process = subprocess.run(
+                [
+                    sops,
+                    "--encrypt",
+                    "--age",
+                    recipient,
+                    "--input-type",
+                    source.input_type,
+                    "--output-type",
+                    source.output_type,
+                    snapshot,
+                ],
+                check=False,
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=180,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise SecretError(f"SOPS encryption timed out: {source.path}") from error
+    finally:
+        if os.path.exists(snapshot):
+            os.unlink(snapshot)
+    if process.returncode != 0 or not process.stdout:
+        raise SecretError(
+            f"SOPS could not encrypt the target to {source.path} "
+            f"(exit {process.returncode}); diagnostic output was suppressed"
+        )
+    atomic_install(source.path, process.stdout)
+    print(f"Encrypted the secrets target to a new source: {source.path}")
+
+
 def converge() -> int:
     config = configuration()
     tools = required_tools()
+    ensure_identity(config.identity_file, tools["age-keygen"])
     validate_identity(config.identity_file)
-    sources = usable_sources(config)
     if config.target.exists() or config.target.is_symlink():
         regular_file(config.target, nonempty=True)
         protect_target(config.target)
+        try:
+            usable_sources(config)
+        except SecretError:
+            # First convergence on the machine that owns the plaintext: create
+            # the encrypted recovery source instead of demanding it exists. An
+            # existing-but-invalid source file is never overwritten.
+            if any(
+                source.path.exists() or source.path.is_symlink()
+                for source in config.sources
+            ):
+                raise
+            encrypt_target_to_source(
+                config, config.sources[0], tools["sops"], tools["age-keygen"]
+            )
+            return 0
         print(f"Secrets target is already present: {config.target}")
         return 0
+    try:
+        sources = usable_sources(config)
+    except SecretError as error:
+        raise SecretError(
+            f"{error}. The identity is ready; create the plaintext target "
+            f"{config.target} and re-run to encrypt it here, or transfer the "
+            "ciphertext and identity from another machine (secrets pull-key)"
+        ) from error
     failures = []
     for source in sources:
         try:

@@ -139,9 +139,29 @@ _remove() {
   fi
 }
 
+# Recompose into a scratch directory and compare with the active composed
+# source so edits inside core or bundle chezmoi trees register as drift.
+_composition_current() {
+  local temp source rc=0
+  local sources=()
+  while IFS= read -r source; do [[ -n "$source" ]] && sources+=("$source"); done < <(
+    python3 "$ENVY_ROOT/lib/manifest.py" resource "${ENVY_MANIFEST:?}" chezmoi_sources
+  )
+  [[ -n "${sources[0]+set}" ]] || return 1
+  temp="$(mktemp -d "${TMPDIR:-/tmp}/envy-compose-verify.XXXXXX")"
+  if python3 "$COMPOSER" "$temp/src" "${sources[@]}" >/dev/null 2>&1; then
+    diff -r -q "$temp/src" "$SRC" >/dev/null 2>&1 || rc=1
+  else
+    rc=1
+  fi
+  rm -rf "$temp"
+  return "$rc"
+}
+
 _verify() {
   command -v chezmoi >/dev/null
   [[ -d "$SRC" ]]
+  _composition_current
   "$CONFLICT_BROKER" verify "$SRC"
   if [[ "${ENVY_SKIP_DEPENDENCY_PINS:-0}" != 1 ]]; then
     python3 "$ENVY_ROOT/lib/dependencies.py" verify
