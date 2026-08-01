@@ -17,6 +17,7 @@ and verified at the immutable commits recorded in `dependencies.json`:
 | Project | Revision | License |
 | --- | --- | --- |
 | zsh-autosuggestions | `e52ee8ca55bcc56a17c828767a3f98f22a68d4eb` | MIT |
+| zsh-completions | `28c5bdcaf81bb89e56d0df8267d822c3b8aed9e0` | ZSH |
 | zsh-syntax-highlighting | `db085e4661f6aafd24e5acb5b2e17e4dd5dddf3e` | BSD-3-Clause |
 | zsh-history-substring-search | `400e58a87f72ecec14f783fbd29bc6be4ff1641c` | BSD-3-Clause |
 | tmux-resurrect | `e87d7d592cac97fa38c12395ebec042c154a1844` | MIT |
@@ -24,4 +25,4 @@ and verified at the immutable commits recorded in `dependencies.json`:
 
 Before release, independently verify each upstream license at the exact revision
 and preserve any required notices. `dependencies.json` is the machine-readable
-inventory used to generate the release SBOM.
+inventory of these revisions and licenses.
