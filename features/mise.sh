@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Converge the exact tool set declared by the active managed Mise configuration.
+set -euo pipefail
+
+ACTION="${1:-converge}"
+MINS_ENV_ROOT="${MINS_ENV_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/mins-env"
+MISE_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml"
+# The path is resolved from MINS_ENV_ROOT.
+# shellcheck disable=SC1091
+source "$MINS_ENV_ROOT/lib/pkg.sh"
+export PATH="$HOME/.local/bin:$PATH"
+pkg_use_external_proxy
+# The core dotnet backend honors an inherited system install root. A managed
+# user install must remain under Mise's own data directory instead.
+unset DOTNET_ROOT
+
+_converge() {
+  [[ -f "$MISE_CONFIG" ]] || {
+    echo "Mise config is missing: $MISE_CONFIG (upgrade chezmoi first)" >&2
+    return 1
+  }
+  local was_installed=true
+  command -v mise >/dev/null 2>&1 || was_installed=false
+  pkg_ensure mise mise
+  if [[ "$was_installed" != true ]]; then
+    mkdir -p "$STATE_ROOT/providers"
+    touch "$STATE_ROOT/providers/mise.installed"
+  fi
+  mise install --locked
+}
+
+_verify() {
+  command -v mise >/dev/null
+  [[ -f "$MISE_CONFIG" ]]
+  mise install --locked --dry-run-code >/dev/null
+}
+
+_remove() {
+  # Tool downloads and shared caches may predate mins-env and are retained.
+  if [[ "${MINS_ENV_PURGE:-false}" == true ]] \
+    && [[ -f "$STATE_ROOT/providers/mise.installed" ]] \
+    && [[ "$(command -v mise 2>/dev/null || true)" == "$HOME/.local/bin/mise" ]]; then
+    rm -f "$HOME/.local/bin/mise"
+  fi
+}
+
+_doctor() {
+  _verify
+  mise doctor >/dev/null
+}
+
+case "$ACTION" in
+  converge) _converge ;;
+  verify) _verify ;;
+  doctor) _doctor ;;
+  remove) _remove ;;
+  *) echo "usage: mise.sh {converge|verify|doctor|remove}" >&2; exit 2 ;;
+esac

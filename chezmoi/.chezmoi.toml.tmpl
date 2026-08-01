@@ -1,0 +1,7 @@
+{{- $xdgConfig := env "XDG_CONFIG_HOME" -}}
+{{- if not $xdgConfig -}}{{- $xdgConfig = joinPath .chezmoi.homeDir ".config" -}}{{- end -}}
+{{- $xdgData := env "XDG_DATA_HOME" -}}
+{{- if not $xdgData -}}{{- $xdgData = joinPath .chezmoi.homeDir ".local/share" -}}{{- end -}}
+[data]
+    xdgConfigHome = {{ $xdgConfig | quote }}
+    xdgDataHome   = {{ $xdgData | quote }}

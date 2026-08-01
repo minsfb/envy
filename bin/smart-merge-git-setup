@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Install or remove the generic smart-merge Git mergetool configuration.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ADAPTER="$ROOT/bin/smart-merge-git"
+AGENT=none
+DRY_RUN=false
+REMOVE=false
+
+usage() {
+  cat <<'EOF'
+usage: smart-merge-git-setup [--agent none|auto|claude] [--dry-run] [--remove]
+
+Configures Git's global `smart-merge` mergetool. Agent fallback is disabled by
+default and must be selected explicitly.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --agent) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; AGENT=$2; shift 2 ;;
+    --dry-run|-n) DRY_RUN=true; shift ;;
+    --remove) REMOVE=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+case "$AGENT" in none|auto|claude) ;; *) usage >&2; exit 2 ;; esac
+
+run_config() {
+  if [[ "$DRY_RUN" == true ]]; then
+    printf 'git config --global'
+    printf ' %q' "$@"
+    printf '\n'
+  else
+    git config --global "$@"
+  fi
+}
+
+if [[ "$REMOVE" == true ]]; then
+  if [[ "$(git config --global merge.tool 2>/dev/null || true)" == smart-merge ]]; then
+    run_config --unset-all merge.tool || true
+  fi
+  run_config --remove-section mergetool.smart-merge 2>/dev/null || true
+  exit 0
+fi
+
+[[ -x "$ADAPTER" ]] || { echo "smart-merge Git adapter is unavailable: $ADAPTER" >&2; exit 1; }
+# Git expands these mergetool placeholders when it invokes the configured command.
+# shellcheck disable=SC2016
+printf -v adapter_command '%q "$BASE" "$LOCAL" "$REMOTE" "$MERGED"' "$ADAPTER"
+if [[ "$AGENT" != none ]]; then
+  printf -v agent_value '%q' "$AGENT"
+  adapter_command="MINS_SMART_MERGE_AGENT=$agent_value $adapter_command"
+fi
+
+run_config merge.tool smart-merge
+run_config mergetool.smart-merge.cmd "$adapter_command"
+run_config mergetool.smart-merge.trustExitCode true
+run_config mergetool.smart-merge.prompt false

@@ -1,0 +1,15 @@
+# Global Agent Instructions
+
+- Follow the closest repository or directory-level `AGENTS.md`; more specific
+  instructions override this file.
+- Claude reads this file through `~/.claude/CLAUDE.md`; Codex reads it through
+  `~/.codex/AGENTS.md`.
+- This machine is managed by `mins-env`. Use `mins-env status`, `mins-env verify`,
+  and focused `mins-env doctor <area>` checks before changing managed files.
+- Read and follow applicable Markdown rules under
+  `~/.config/agent-guidance/rules/`; environment bundles may add instructions
+  there without replacing this portable base.
+- Never print, log, commit, or place credentials in command arguments or remote
+  URLs.
+- Before sharing a repository externally, audit it for private URLs, identities,
+  package names, credentials, proprietary documents, and restricted assets.

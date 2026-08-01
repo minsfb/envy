@@ -1,0 +1,32 @@
+# ~/.config/mise/config.toml — managed by chezmoi
+# (source: mins-util/mins-env/chezmoi/dot_config/mise/config.toml.tmpl)
+#
+# Global tool versions. Per-project overrides go in a repo-local `mise.toml`.
+# After changing: `chezmoi apply` then `mise install`.
+
+[tools]
+node   = "24.18.0"                    # replaces nvm; projects can override via .nvmrc
+bun    = "1.3.14"
+uv     = "0.11.30"                    # Astral's Python package/venv manager
+rust   = "1.97.1"                     # provides cargo + rustc + rustup
+java   = "temurin-21.0.11+10.0.LTS"   # JDK; mise auto-exports JAVA_HOME
+dotnet = "10.0.302"
+bat    = "0.26.1"                     # `cat` with syntax highlighting + git gutter
+glow   = "2.1.2"                      # markdown renderer for the terminal
+age    = "1.3.0"                      # age identities and recipient tooling for encrypted secrets
+sops   = "3.10.2"                     # structured secrets encrypted to age recipients
+
+# ── Android SDK (opt-in) ──────────────────────────────────────────────────────
+# mise CAN manage the Android SDK, but via a community plugin that needs one
+# manual step (license acceptance) and could fail `mise install` if the plugin is
+# unavailable. To enable:
+#   1. uncomment the line below
+#   2. mise install android-sdk
+#   3. yes | "$(mise where android-sdk)/cmdline-tools/latest/bin/sdkmanager" --licenses
+# Until then, enable the optional mins-env `adb` feature to select an existing SDK.
+# "android-sdk" = "latest"
+
+[settings]
+# Explicit installs only — no surprise downloads when cd-ing into a repo with a
+# mise.toml. Run `mise install` yourself. Flip to true for auto-install on cd.
+not_found_auto_install = false

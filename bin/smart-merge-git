@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Git mergetool adapter for the repository-neutral smart-merge engine.
+set -euo pipefail
+
+if [[ $# -ne 4 ]]; then
+  echo 'usage: smart-merge-git BASE LOCAL REMOTE MERGED' >&2
+  exit 2
+fi
+
+BASE=$1
+LOCAL=$2
+REMOTE=$3
+MERGED=$4
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENGINE="$ROOT/bin/smart-merge"
+TEMP_DIR="$(mktemp -d)"
+CONTEXT="$TEMP_DIR/context.txt"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+for input in "$LOCAL" "$REMOTE"; do
+  [[ -f "$input" ]] || { echo "smart-merge-git: missing input: $input" >&2; exit 2; }
+done
+
+{
+  echo '=== GIT MERGE CONTEXT ==='
+  echo "File: $MERGED"
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Current branch: $(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+    echo "Merging branch: $(git rev-parse --abbrev-ref MERGE_HEAD 2>/dev/null || echo MERGE_HEAD)"
+    echo
+    echo 'Recent current-side commits:'
+    git log --no-merges -5 --format='%h %s' HEAD -- "$MERGED" 2>/dev/null || true
+    echo
+    echo 'Recent incoming-side commits:'
+    git log --no-merges -5 --format='%h %s' MERGE_HEAD -- "$MERGED" 2>/dev/null || true
+  fi
+} > "$CONTEXT"
+
+arguments=(
+  --local "$LOCAL"
+  --incoming "$REMOTE"
+  --output "$MERGED"
+  --context "$CONTEXT"
+  --agent "${MINS_SMART_MERGE_AGENT:-none}"
+)
+[[ -f "$BASE" ]] && arguments=(--base "$BASE" "${arguments[@]}")
+exec "$ENGINE" "${arguments[@]}"

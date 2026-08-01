@@ -1,0 +1,877 @@
+#!/usr/bin/env bash
+# mins-env - install, upgrade, verify, diagnose, and remove a portable dev environment.
+set -euo pipefail
+
+MINS_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MINS_ENV_DIR="$MINS_ENV_ROOT"
+export MINS_ENV_ROOT MINS_ENV_DIR
+
+_MINS_RAW_ARGS=("$@")
+_MINS_COMMAND_ARGS=()
+_MINS_BUNDLES=()
+_MINS_INDEX=0
+while (( _MINS_INDEX < ${#_MINS_RAW_ARGS[@]} )); do
+  _MINS_ARG="${_MINS_RAW_ARGS[$_MINS_INDEX]}"
+  case "$_MINS_ARG" in
+    --bundle)
+      ((_MINS_INDEX++)) || true
+      (( _MINS_INDEX < ${#_MINS_RAW_ARGS[@]} )) || {
+        echo "Error: --bundle requires a path" >&2
+        exit 2
+      }
+      _MINS_BUNDLES+=("${_MINS_RAW_ARGS[$_MINS_INDEX]}")
+      ;;
+    --bundle=*) _MINS_BUNDLES+=("${_MINS_ARG#*=}") ;;
+    *) _MINS_COMMAND_ARGS+=("$_MINS_ARG") ;;
+  esac
+  ((_MINS_INDEX++)) || true
+done
+set -- "${_MINS_COMMAND_ARGS[@]}"
+unset _MINS_RAW_ARGS _MINS_COMMAND_ARGS _MINS_INDEX _MINS_ARG
+
+if [[ -z "${_MINS_BUNDLES[0]+set}" ]]; then
+  _MINS_EARLY_STATE="${XDG_CONFIG_HOME:-$HOME/.config}/mins-env/state.json"
+  if [[ -f "$_MINS_EARLY_STATE" ]]; then
+    while IFS= read -r _MINS_STORED_BUNDLE; do
+      [[ -n "$_MINS_STORED_BUNDLE" ]] && _MINS_BUNDLES+=("$_MINS_STORED_BUNDLE")
+    done < <(python3 - "$_MINS_EARLY_STATE" <<'PY' 2>/dev/null || true
+import json,sys
+for item in json.load(open(sys.argv[1])).get("bundles", []):
+    if not item.get("core") and item.get("path"):
+        print(item["path"])
+PY
+    )
+  fi
+  unset _MINS_EARLY_STATE _MINS_STORED_BUNDLE
+fi
+
+# shellcheck source=lib/features.sh
+source "$MINS_ENV_ROOT/lib/features.sh"
+mins_manifest_init "${_MINS_BUNDLES[@]}"
+# shellcheck source=lib/state.sh
+source "$MINS_ENV_ROOT/lib/state.sh"
+
+readonly ENV_FILE_NAME="init-sh.env"
+SELECT_ONLY=()
+SELECT_EXCEPT=()
+_MINS_ENV_TEMP_STATE=""
+
+_cleanup_all() {
+  [[ -n "$_MINS_ENV_TEMP_STATE" ]] && rm -f "$_MINS_ENV_TEMP_STATE"
+  mins_manifest_cleanup
+}
+trap '_cleanup_all' EXIT
+
+die() { echo "Error: $*" >&2; exit 1; }
+warn() { echo "Warning: $*" >&2; }
+
+_json_quote() {
+  python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
+}
+
+_current_commit() {
+  local commit
+  commit="$(git -C "$MINS_ENV_ROOT" rev-parse --short HEAD 2>/dev/null)" || { echo unknown; return; }
+  if [[ -n "$(git -C "$MINS_ENV_ROOT" status --porcelain 2>/dev/null)" ]]; then
+    commit="$commit-dirty"
+  fi
+  echo "$commit"
+}
+
+_prepare_state() {
+  if mins_state_exists; then
+    if [[ "${MINS_ENV_DRY_RUN:-false}" == true && -z "$_MINS_ENV_TEMP_STATE" ]]; then
+      _MINS_ENV_TEMP_STATE="$(mktemp)"
+      cp "$(mins_state_file)" "$_MINS_ENV_TEMP_STATE"
+      _MINS_STATE_FILE="$_MINS_ENV_TEMP_STATE"
+      MINS_ENV_STATE_FILE="$_MINS_ENV_TEMP_STATE"
+      export MINS_ENV_STATE_FILE
+    fi
+    mins_state_migrate "$(mins_manifest_file)" "$MINS_PLATFORM" "$MINS_SHELL" "$MINS_ENV_ROOT"
+    if [[ "$(mins_state_get platform_hierarchy '""' 2>/dev/null || true)" \
+      != "$(mins_platform_hierarchy "$MINS_PLATFORM")" ]]; then
+      mins_state_set platform_hierarchy \
+        "$(_json_quote "$(mins_platform_hierarchy "$MINS_PLATFORM")")"
+    fi
+    if [[ "${MINS_ENV_DRY_RUN:-false}" != true && "$(mins_state_get installed false)" == true ]]; then
+      if _launcher_current; then
+        if [[ "$(mins_state_get ownership.launcher.created false 2>/dev/null || echo false)" != true ]] \
+          || [[ "$(mins_state_get ownership.launcher.path '""' 2>/dev/null || true)" != "$HOME/.local/bin/mins-env" ]]; then
+          mins_state_set ownership.launcher.path "$(_json_quote "$HOME/.local/bin/mins-env")"
+          mins_state_set ownership.launcher.created true
+        fi
+      else
+        _write_launcher
+      fi
+    fi
+  fi
+}
+
+_ensure_installed() {
+  _prepare_state
+  if ! mins_state_exists || [[ "$(mins_state_get installed false 2>/dev/null || echo false)" != true ]]; then
+    echo "mins-env is not installed for this checkout." >&2
+    echo "Run: $MINS_ENV_ROOT/bin/mins-env install" >&2
+    return 2
+  fi
+}
+
+_array_contains() {
+  local needle="$1" item
+  shift
+  for item in "$@"; do [[ "$item" == "$needle" ]] && return 0; done
+  return 1
+}
+
+_append_csv() {
+  local destination="$1" raw="$2" item
+  local old_ifs="$IFS"
+  IFS=','
+  for item in $raw; do
+    item="${item#"${item%%[![:space:]]*}"}"
+    item="${item%"${item##*[![:space:]]}"}"
+    [[ -n "$item" ]] || continue
+    if [[ "$destination" == only ]]; then SELECT_ONLY+=("$item"); else SELECT_EXCEPT+=("$item"); fi
+  done
+  IFS="$old_ifs"
+}
+
+_reset_selectors() { SELECT_ONLY=(); SELECT_EXCEPT=(); }
+
+_select_only_has_items() { [[ -n "${SELECT_ONLY[0]+set}" ]]; }
+_select_except_has_items() { [[ -n "${SELECT_EXCEPT[0]+set}" ]]; }
+
+_validate_selectors() {
+  local feature
+  if _select_only_has_items && _select_except_has_items; then
+    die "--only and --except are mutually exclusive"
+  fi
+  if _select_only_has_items; then
+    for feature in "${SELECT_ONLY[@]}"; do
+      mins_feature_exists "$feature" || die "Unknown feature: $feature"
+      mins_feature_in_scope "$feature" || die "Feature '$feature' is unavailable on $MINS_PLATFORM"
+    done
+  fi
+  if _select_except_has_items; then
+    for feature in "${SELECT_EXCEPT[@]}"; do
+      mins_feature_exists "$feature" || die "Unknown feature: $feature"
+      mins_feature_in_scope "$feature" || die "Feature '$feature' is unavailable on $MINS_PLATFORM"
+    done
+  fi
+}
+
+_validate_only_enabled() {
+  local feature enabled
+  _select_only_has_items || return 0
+  for feature in "${SELECT_ONLY[@]}"; do
+    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+    [[ "$enabled" == true ]] || die "Feature '$feature' is not enabled. Run 'mins-env install --reconfigure'."
+  done
+}
+
+_collect_targets() {
+  local feature enabled
+  for feature in $(mins_list_features); do
+    mins_feature_in_scope "$feature" || continue
+    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+    [[ "$enabled" == true ]] || continue
+    if _select_only_has_items; then
+      _array_contains "$feature" "${SELECT_ONLY[@]}" || continue
+    elif _select_except_has_items; then
+      _array_contains "$feature" "${SELECT_EXCEPT[@]}" && continue
+    fi
+    echo "$feature"
+  done
+
+}
+
+_feature_dependencies_ready() {
+  local feature="$1" dependency enabled selected rc
+  while IFS= read -r dependency; do
+    [[ -n "$dependency" ]] || continue
+    enabled="$(mins_state_feature_get "$dependency" enabled false 2>/dev/null || echo false)"
+    if [[ "$enabled" != true ]]; then
+      echo "Feature '$feature' requires disabled feature '$dependency'." >&2
+      return 1
+    fi
+    selected=true
+    if _select_only_has_items && ! _array_contains "$dependency" "${SELECT_ONLY[@]}"; then
+      selected=false
+    elif _select_except_has_items && _array_contains "$dependency" "${SELECT_EXCEPT[@]}"; then
+      selected=false
+    fi
+    if [[ "${MINS_ENV_DRY_RUN:-false}" == true && "$selected" == true ]]; then
+      continue
+    fi
+    if [[ "$selected" == true && "$(mins_state_feature_get "$dependency" status pending 2>/dev/null || echo pending)" == failed ]]; then
+      echo "Feature '$feature' requires failed dependency '$dependency'." >&2
+      return 1
+    fi
+    rc=0
+    mins_verify_feature "$dependency" >/dev/null 2>&1 || rc=$?
+    if [[ $rc -ne 0 && $rc -ne $MINS_HANDLER_UNAVAILABLE ]]; then
+      echo "Feature '$feature' requires drifted '$dependency'." >&2
+      [[ "$selected" == true ]] || echo "Include '$dependency' in the upgrade selection." >&2
+      return 1
+    fi
+  done < <(mins_feature_dependencies "$feature")
+}
+
+_write_launcher() {
+  local bin_dir="$HOME/.local/bin" launcher="$HOME/.local/bin/mins-env" expected owned_path owned temp target
+  target="$MINS_ENV_ROOT/bin/mins-env"
+  mkdir -p "$bin_dir"
+  printf -v expected 'exec %q "$@"' "$target"
+  if [[ -e "$launcher" || -L "$launcher" ]] && ! grep -Fxq "$expected" "$launcher" 2>/dev/null; then
+    owned_path="$(mins_state_get ownership.launcher.path '""' 2>/dev/null || true)"
+    owned="$(mins_state_get ownership.launcher.created false 2>/dev/null || echo false)"
+    if [[ "$owned" != true || "$owned_path" != "$launcher" ]] || ! grep -qF 'mins-env' "$launcher" 2>/dev/null; then
+      die "$launcher already exists and is not managed by this installation"
+    fi
+  fi
+  temp="$(mktemp "$bin_dir/.mins-env.XXXXXX")"
+  {
+    echo '#!/usr/bin/env bash'
+    echo "$expected"
+  } > "$temp"
+  chmod 755 "$temp"
+  mv "$temp" "$launcher"
+  mins_state_set ownership.launcher.path "$(_json_quote "$launcher")"
+  mins_state_set ownership.launcher.created true
+}
+
+_launcher_current() {
+  local launcher="$HOME/.local/bin/mins-env" expected target
+  [[ -f "$launcher" ]] || return 1
+  target="$MINS_ENV_ROOT/bin/mins-env"
+  printf -v expected 'exec %q "$@"' "$target"
+  grep -Fxq "$expected" "$launcher"
+}
+
+_remove_launcher() {
+  local launcher
+  launcher="$(mins_state_get ownership.launcher.path '""' 2>/dev/null || true)"
+  [[ -n "$launcher" ]] || return 0
+  if [[ "$launcher" == "$HOME/.local/bin/mins-env" ]] && _launcher_current; then
+    rm -f "$launcher"
+  fi
+}
+
+cmd_generate_env() {
+  local state_dir env_file
+  state_dir="$(mins_state_dir)"
+  env_file="$state_dir/$ENV_FILE_NAME"
+  python3 "$MINS_ENV_ROOT/lib/render_env.py" \
+    "$(mins_manifest_file)" "$(mins_state_file)" "$env_file" "$MINS_ENV_ROOT"
+}
+
+_select_install_features() {
+  local preset="$1" interactive="$2" reconfigure="$3" feature tier description enabled
+  local current_value selection_explicit has_current
+  INSTALL_SELECTION=()
+  for feature in $(mins_list_features); do
+    mins_feature_in_scope "$feature" || continue
+    tier="$(mins_feature_tier "$feature")"
+    enabled=false
+    case "$tier" in
+      core) enabled=true ;;
+      *)
+        if [[ "$preset" == recommended ]] && mins_feature_default_enabled "$feature"; then
+          enabled=true
+        fi
+        ;;
+    esac
+    has_current=false
+    if [[ "$reconfigure" == true && "$interactive" == true ]] && mins_state_exists; then
+      current_value="$(mins_state_feature_get "$feature" enabled 2>/dev/null || true)"
+      selection_explicit="$(mins_state_feature_get "$feature" selection_explicit true 2>/dev/null || echo true)"
+      if [[ "$selection_explicit" == true ]] \
+        && [[ "$current_value" == true || "$current_value" == false ]]; then
+        enabled="$current_value"
+        has_current=true
+      fi
+    fi
+    if [[ "$interactive" == true && "$tier" != core ]]; then
+      description="$(mins_feature_get "$feature" description 2>/dev/null || echo "$feature")"
+      _prompt_feature_toggle "$feature" "$description" "$enabled" "$has_current"
+      enabled="$FEATURE_PROMPT_VALUE"
+    fi
+    if [[ "$enabled" == true ]]; then INSTALL_SELECTION+=("$feature"); fi
+  done
+}
+
+FEATURE_PROMPT_VALUE=
+FEATURE_PROMPT_REPLY=
+
+_read_feature_reply() {
+  local initial="$1"
+  FEATURE_PROMPT_REPLY=
+  if [[ -n "$initial" && "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+    IFS= read -e -i "$initial" -r FEATURE_PROMPT_REPLY </dev/tty
+    return $?
+  fi
+  if [[ -n "$initial" ]]; then
+    # Bash 3 lacks `read -i`. Render the default and place the cursor over it
+    # so the first typed character visually replaces the current value.
+    printf '%s\b' "$initial"
+  fi
+  IFS= read -r FEATURE_PROMPT_REPLY </dev/tty
+}
+
+_prompt_feature_toggle() {
+  local feature="$1" description="$2" enabled="$3" has_current="$4"
+  local initial reply
+  if [[ "$has_current" == true ]]; then
+    if [[ "$enabled" == true ]]; then initial=Y; else initial=n; fi
+  else
+    initial=
+  fi
+
+  while true; do
+    printf '  %-18s %s [Y/n]: ' "$feature" "$description"
+    if ! _read_feature_reply "$initial"; then
+      printf '\n'
+      return 1
+    fi
+    reply="$FEATURE_PROMPT_REPLY"
+    case "$reply" in
+      "")
+        if [[ "$has_current" == true ]]; then
+          FEATURE_PROMPT_VALUE="$enabled"
+          return 0
+        fi
+        ;;
+      y|Y|yes|YES) FEATURE_PROMPT_VALUE=true; return 0 ;;
+      n|N|no|NO) FEATURE_PROMPT_VALUE=false; return 0 ;;
+    esac
+    echo '    Enter Y or n.'
+  done
+}
+
+_show_install_plan() {
+  local feature tier
+  echo ""
+  echo "Selected features for $MINS_PLATFORM:"
+  [[ -n "${INSTALL_SELECTION[0]+set}" ]] || return 0
+  for feature in "${INSTALL_SELECTION[@]}"; do
+    tier="$(mins_feature_tier "$feature")"
+    printf '  %-18s %-11s %s\n' "$feature" "$tier" "$(mins_feature_get "$feature" description)"
+  done
+}
+
+_remove_deactivated_features() {
+  mins_state_exists || return 0
+  local feature enabled rc index
+  local deactivated=() reversed=()
+  for feature in $(mins_list_features); do
+    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+    [[ "$enabled" == true ]] || continue
+    if [[ -n "${INSTALL_SELECTION[0]+set}" ]] && _array_contains "$feature" "${INSTALL_SELECTION[@]}"; then
+      continue
+    fi
+    deactivated+=("$feature")
+  done
+  for ((index=${#deactivated[@]}-1; index>=0; index--)); do reversed+=("${deactivated[$index]}"); done
+  for feature in "${reversed[@]}"; do
+    rc=0
+    mins_run_feature_handler "$feature" remove || rc=$?
+    if [[ $rc -ne 0 && $rc -ne $MINS_HANDLER_UNAVAILABLE ]]; then
+      die "Failed to remove deselected feature '$feature'; prior selection was retained"
+    fi
+  done
+}
+
+_reconcile_selection_consumers() {
+  local feature enabled reconcile rc failed=0
+  for feature in $(mins_list_features); do
+    reconcile="$(mins_feature_get "$feature" reconcile_after_selection_change 2>/dev/null || echo false)"
+    [[ "$reconcile" == true ]] || continue
+    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+    [[ "$enabled" == true ]] || continue
+    rc=0
+    mins_run_feature_handler "$feature" converge || rc=$?
+    if [[ $rc -ne 0 ]]; then
+      mins_state_feature_result "$feature" failed "selection reconciliation failed"
+      ((failed++)) || true
+    fi
+  done
+  (( failed == 0 ))
+}
+
+cmd_install() {
+  local preset="" reconfigure=false assume_yes=false dry_run=false interactive=false
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --preset|--profile)
+        [[ $# -ge 2 ]] || die "$1 requires core or recommended"
+        preset="$2"
+        shift 2
+        ;;
+      --reconfigure) reconfigure=true; shift ;;
+      --yes|-y) assume_yes=true; shift ;;
+      --dry-run|-n) dry_run=true; shift ;;
+      *) die "Unknown install option: $1" ;;
+    esac
+  done
+  [[ -z "$preset" || "$preset" == core || "$preset" == recommended ]] || die "Unknown preset: $preset"
+  mins_manifest_validate
+  mins_detect_platform
+  export MINS_ENV_DRY_RUN="$dry_run"
+  [[ "$MINS_PLATFORM" != unsupported ]] || die "Unsupported platform. Windows requires Git Bash."
+  _prepare_state
+
+  if mins_state_exists && [[ "$(mins_state_get installed false)" == true && "$reconfigure" == false ]]; then
+    echo "mins-env is already installed for $MINS_ENV_ROOT."
+    if [[ "$dry_run" == true ]]; then cmd_upgrade --dry-run; return; fi
+    _write_launcher
+    if [[ "$assume_yes" == true ]]; then cmd_upgrade; return; fi
+    if [[ -t 0 && -t 1 ]]; then
+      printf 'Run upgrade now? [Y/n] '
+      local reply
+      read -r reply </dev/tty || reply=n
+      case "$reply" in n|N|no|NO) return 0 ;; esac
+      cmd_upgrade
+    else
+      echo "Run 'mins-env upgrade' to converge enabled features."
+    fi
+    return 0
+  fi
+
+  echo "mins-env install"
+  echo "  Checkout:  $MINS_ENV_ROOT"
+  echo "  Workspace: $WORKSPACE_ROOT"
+  echo "  Platform: $MINS_PLATFORM"
+  echo "  Shell:    $MINS_SHELL"
+  if [[ -n "${_MINS_BUNDLES[0]+set}" ]]; then
+    echo "  Bundles:  ${_MINS_BUNDLES[*]}"
+  fi
+  echo ""
+  echo "Core features provide managed dotfiles, the mise toolchain, and command paths."
+  echo "Recommended and optional features can be changed later with install --reconfigure."
+
+  if [[ -z "$preset" ]]; then
+    if [[ "$assume_yes" == true ]]; then
+      preset=recommended
+    elif [[ -t 0 && -t 1 ]]; then
+      preset=recommended
+      interactive=true
+    else
+      die "Non-interactive install requires --yes or --preset core|recommended"
+    fi
+  fi
+  _select_install_features "$preset" "$interactive" "$reconfigure"
+  [[ "$interactive" == true ]] && preset=custom
+  _show_install_plan
+  if [[ "$dry_run" == true ]]; then
+    echo ""
+    echo "Dry run: no changes made."
+    return 0
+  fi
+
+  _remove_deactivated_features
+
+  if ! mins_state_exists; then
+    mins_state_init "$(mins_manifest_file)" "$MINS_PLATFORM" "$MINS_SHELL" "$MINS_ENV_ROOT" "$preset"
+  else
+    mins_state_set installed true
+    mins_state_set preset "$(_json_quote "$preset")"
+    mins_state_set mins_env_root "$(_json_quote "$MINS_ENV_ROOT")"
+    mins_state_set workspace_root "$(_json_quote "$WORKSPACE_ROOT")"
+    mins_state_set bundles "$(mins_manifest_get bundles)"
+    mins_state_set manifest_fingerprint "$(_json_quote "$(mins_manifest_fingerprint)")"
+  fi
+  mins_state_set platform_hierarchy \
+    "$(_json_quote "$(mins_platform_hierarchy "$MINS_PLATFORM")")"
+
+  local feature enabled tier
+  for feature in $(mins_list_features); do
+    tier="$(mins_feature_tier "$feature")"
+    enabled=false
+    if mins_feature_in_scope "$feature" && [[ -n "${INSTALL_SELECTION[0]+set}" ]] \
+      && _array_contains "$feature" "${INSTALL_SELECTION[@]}"; then enabled=true; fi
+    mins_state_feature_init "$feature" "$enabled" "$tier" "$(mins_feature_origin "$feature")"
+  done
+  _write_launcher
+  cmd_upgrade --from-install
+}
+
+cmd_upgrade() {
+  local force=false dry_run=false from_install=false feature rc applied=0 failed=0 skipped=0 log_dir log_file target_count=0
+  _reset_selectors
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --only|-o) [[ $# -ge 2 ]] || die "$1 requires feature names"; _append_csv only "$2"; shift 2 ;;
+      --except|-e) [[ $# -ge 2 ]] || die "$1 requires feature names"; _append_csv except "$2"; shift 2 ;;
+      --force) force=true; shift ;;
+      --dry-run|-n) dry_run=true; shift ;;
+      --from-install) from_install=true; shift ;;
+      *) die "Unknown upgrade option: $1" ;;
+    esac
+  done
+  export MINS_ENV_DRY_RUN="$dry_run"
+  [[ "$from_install" == true ]] || _ensure_installed || return $?
+  _validate_selectors
+  _validate_only_enabled
+  local targets=()
+  while IFS= read -r feature; do
+    if [[ -n "$feature" ]]; then targets+=("$feature"); ((target_count++)) || true; fi
+  done < <(_collect_targets)
+  (( target_count > 0 )) || { echo "No enabled features selected."; return 0; }
+
+  echo "mins-env upgrade"
+  [[ "$dry_run" == true ]] && echo "  Mode: dry run"
+  if [[ "$dry_run" == false ]]; then
+    log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/mins-env/logs"
+    mkdir -p "$log_dir"
+    log_file="$(mktemp "$log_dir/$(date -u '+%Y%m%dT%H%M%SZ').XXXXXX.log")"
+  fi
+
+  for feature in "${targets[@]}"; do
+    if ! _feature_dependencies_ready "$feature"; then
+      [[ "$dry_run" == true ]] || mins_state_feature_result "$feature" failed "dependency is unavailable or drifted"
+      ((failed++)) || true
+      continue
+    fi
+    rc=0
+    mins_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
+    if [[ "$force" == false && $rc -eq 0 ]]; then
+      echo "  OK $feature - current"
+      if [[ "$dry_run" == false ]]; then
+        mins_state_feature_set "$feature" status '"current"'
+        mins_state_feature_set "$feature" detail '""'
+        mins_state_feature_verify "$feature" current ""
+      fi
+      ((skipped++)) || true
+      continue
+    fi
+    if [[ "$dry_run" == true ]]; then
+      echo "  WOULD UPGRADE $feature"
+      continue
+    fi
+
+    echo ""
+    echo "-- $feature: $(mins_feature_get "$feature" description)"
+    set +e
+    MINS_ENV_DRY_RUN=0 mins_run_feature_handler "$feature" converge 2>&1 | tee -a "$log_file"
+    rc=${PIPESTATUS[0]}
+    set -e
+    [[ $rc -eq $MINS_HANDLER_UNAVAILABLE ]] && rc=0
+    if [[ $rc -eq 0 ]]; then
+      mins_state_feature_result "$feature" current ""
+      echo "  OK $feature upgraded"
+      ((applied++)) || true
+    else
+      mins_state_feature_result "$feature" failed "handler exited $rc; see $log_file"
+      echo "  FAILED $feature (exit $rc; log: $log_file)" >&2
+      ((failed++)) || true
+    fi
+  done
+
+  if [[ "$dry_run" == false ]]; then
+    cmd_generate_env
+    for feature in "${targets[@]}"; do
+      [[ "$(mins_state_feature_get "$feature" status disabled 2>/dev/null || echo disabled)" == current ]] || continue
+      rc=0
+      mins_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
+      if [[ $rc -eq 0 ]]; then
+        mins_state_feature_verify "$feature" current ""
+      elif [[ $rc -eq $MINS_HANDLER_UNAVAILABLE ]]; then
+        mins_state_feature_verify "$feature" unknown "no verify handler"
+      else
+        mins_state_feature_verify "$feature" drifted "verification failed after convergence"
+        mins_state_feature_result "$feature" failed "verification failed after convergence"
+        echo "  FAILED $feature verification after convergence" >&2
+        ((failed++)) || true
+        if (( applied > 0 )); then ((applied--)) || true; fi
+      fi
+    done
+    mins_state_set core_revision "$(_json_quote "$(_current_commit)")"
+    mins_state_set last_upgrade_at "$(_json_quote "$(date -u '+%Y-%m-%dT%H:%M:%SZ')")"
+  fi
+  echo ""
+  echo "Summary: $applied upgraded, $skipped current, $failed failed"
+  (( failed == 0 ))
+}
+
+cmd_status() {
+  local json=false
+  while [[ $# -gt 0 ]]; do
+    case "$1" in --json) json=true; shift ;; *) die "Unknown status option: $1" ;; esac
+  done
+  _ensure_installed || return $?
+  if [[ "$json" == true ]]; then mins_state_export; return; fi
+  python3 "$MINS_ENV_ROOT/lib/status.py" \
+    "$(mins_manifest_file)" "$(mins_state_file)" "$MINS_PLATFORM" "$MINS_ENV_ROOT" \
+    "$(mins_platform_hierarchy "$MINS_PLATFORM")"
+}
+
+cmd_verify() {
+  local json=false feature rc failed=0 unknown=0 target_count=0
+  _reset_selectors
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --only|-o) [[ $# -ge 2 ]] || die "$1 requires feature names"; _append_csv only "$2"; shift 2 ;;
+      --except|-e) [[ $# -ge 2 ]] || die "$1 requires feature names"; _append_csv except "$2"; shift 2 ;;
+      --json) json=true; shift ;;
+      *) die "Unknown verify option: $1" ;;
+    esac
+  done
+  _ensure_installed || return $?
+  _validate_selectors
+  _validate_only_enabled
+  local targets=() results=()
+  while IFS= read -r feature; do
+    if [[ -n "$feature" ]]; then targets+=("$feature"); ((target_count++)) || true; fi
+  done < <(_collect_targets)
+  if (( target_count > 0 )); then
+    for feature in "${targets[@]}"; do
+      rc=0
+      mins_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
+      case "$rc" in
+        0) mins_state_feature_verify "$feature" current ""; results+=("$feature=current") ;;
+        "$MINS_HANDLER_UNAVAILABLE") mins_state_feature_verify "$feature" unknown "no verify handler"; results+=("$feature=unknown"); ((unknown++)) || true ;;
+        *) mins_state_feature_verify "$feature" drifted "verify handler failed"; results+=("$feature=drifted"); ((failed++)) || true ;;
+      esac
+    done
+  fi
+  if [[ "$json" == true ]]; then
+    if (( target_count > 0 )); then
+      python3 -c 'import json,sys; print(json.dumps(dict(item.split("=",1) for item in sys.argv[1:]),indent=2,sort_keys=True))' "${results[@]}"
+    else
+      echo '{}'
+    fi
+  else
+    if (( target_count > 0 )); then
+      for feature in "${results[@]}"; do printf '  %-18s %s\n' "${feature%%=*}" "${feature#*=}"; done
+    fi
+    echo "Verified $target_count features: $failed drifted, $unknown without checks"
+  fi
+  (( failed == 0 ))
+}
+
+_doctor_area() {
+  local area="$1" feature_rc=0 alias
+  case "$area" in
+    state)
+      mins_state_validate
+      [[ "$(mins_state_get mins_env_root)" == "$MINS_ENV_ROOT" ]]
+      [[ "$(mins_state_get manifest_fingerprint)" == "$(mins_manifest_fingerprint)" ]]
+      [[ "$(mins_state_get platform_hierarchy)" == "$(mins_platform_hierarchy "$MINS_PLATFORM")" ]]
+      ;;
+    features) cmd_verify >/dev/null ;;
+    shell) command -v zsh >/dev/null 2>&1 && command -v tmux >/dev/null 2>&1 ;;
+    chezmoi) mins_run_feature_handler chezmoi doctor ;;
+    mise) mins_run_feature_handler mise doctor ;;
+    network)
+      local probe_url="${MINS_ENV_NETWORK_PROBE_URL:-https://github.com}"
+      if [[ -n "${MINS_ENV_NETWORK_PROXY:-}" ]]; then
+        curl -fsS --max-time 10 --proxy "$MINS_ENV_NETWORK_PROXY" "$probe_url" >/dev/null
+      else
+        curl -fsS --max-time 10 "$probe_url" >/dev/null
+      fi
+      ;;
+    *)
+      alias="$(mins_manifest_get "doctor_aliases.$area" 2>/dev/null || true)"
+      [[ -z "$alias" ]] || area="$alias"
+      mins_feature_exists "$area" || return 2
+      mins_feature_in_scope "$area" || return 2
+      [[ "$(mins_state_feature_get "$area" enabled false 2>/dev/null || echo false)" == true ]] || return 2
+      mins_run_feature_handler "$area" doctor || feature_rc=$?
+      if [[ $feature_rc -eq $MINS_HANDLER_UNAVAILABLE ]]; then mins_verify_feature "$area"; else return "$feature_rc"; fi
+      ;;
+  esac
+}
+
+cmd_doctor() {
+  local json=false verbose=false area feature specification rc failed=0
+  local areas=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in --json) json=true; shift ;; --verbose|-v) verbose=true; shift ;; *) areas+=("$1"); shift ;; esac
+  done
+  [[ -n "${areas[0]+set}" ]] || areas=(all)
+  _ensure_installed || return $?
+  if _array_contains all "${areas[@]}"; then
+    areas=(state features shell network)
+    for feature in $(mins_list_features); do
+      mins_feature_in_scope "$feature" || continue
+      [[ "$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)" == true ]] || continue
+      specification="$(mins_feature_resolve_handler "$feature" doctor 2>/dev/null || true)"
+      [[ -n "$specification" ]] || continue
+      _array_contains "$feature" "${areas[@]}" || areas+=("$feature")
+    done
+  fi
+  local results=()
+  for area in "${areas[@]}"; do
+    rc=0
+    if [[ "$verbose" == true && "$json" == false ]]; then
+      _doctor_area "$area" || rc=$?
+    else
+      _doctor_area "$area" >/dev/null 2>&1 || rc=$?
+    fi
+    if [[ $rc -eq 0 ]]; then results+=("$area=ok"); else results+=("$area=failed"); ((failed++)) || true; fi
+  done
+  if [[ "$json" == true ]]; then
+    python3 -c 'import json,sys; print(json.dumps(dict(item.split("=",1) for item in sys.argv[1:]),indent=2,sort_keys=True))' "${results[@]}"
+  else
+    echo "mins-env doctor"
+    for area in "${results[@]}"; do printf '  %-12s %s\n' "${area%%=*}" "${area#*=}"; done
+    [[ $failed -eq 0 ]] || echo "Run individual areas with --verbose for details."
+  fi
+  (( failed == 0 ))
+}
+
+_validate_uninstall_dependencies() {
+  local targets=("$@") feature dependency enabled
+  for feature in $(mins_list_features); do
+    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+    [[ "$enabled" == true ]] || continue
+    _array_contains "$feature" "${targets[@]}" && continue
+    while IFS= read -r dependency; do
+      [[ -n "$dependency" ]] || continue
+      if _array_contains "$dependency" "${targets[@]}"; then
+        die "Cannot uninstall '$dependency' while enabled '$feature' depends on it"
+      fi
+    done < <(mins_feature_dependencies "$feature")
+  done
+}
+
+_validate_uninstall_core() {
+  local feature
+  for feature in "$@"; do
+    if [[ "$(mins_feature_tier "$feature")" == core ]]; then
+      die "Core feature '$feature' can only be removed by a full uninstall"
+    fi
+  done
+}
+
+cmd_uninstall() {
+  local purge=false assume_yes=false dry_run=false feature rc failed=0 all_features=true reply target_count=0
+  _reset_selectors
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --only|-o) [[ $# -ge 2 ]] || die "$1 requires feature names"; _append_csv only "$2"; all_features=false; shift 2 ;;
+      --except|-e) [[ $# -ge 2 ]] || die "$1 requires feature names"; _append_csv except "$2"; all_features=false; shift 2 ;;
+      --purge) purge=true; shift ;;
+      --yes|-y) assume_yes=true; shift ;;
+      --dry-run|-n) dry_run=true; shift ;;
+      *) die "Unknown uninstall option: $1" ;;
+    esac
+  done
+  export MINS_ENV_DRY_RUN="$dry_run"
+  if ! mins_state_exists; then echo "mins-env is not installed; nothing to remove."; return 0; fi
+  _prepare_state
+  if [[ "$(mins_state_get installed false)" != true ]]; then echo "mins-env is not installed; nothing to remove."; return 0; fi
+  local targets=() reversed=()
+  _validate_selectors
+  _validate_only_enabled
+  while IFS= read -r feature; do
+    if [[ -n "$feature" ]]; then targets+=("$feature"); ((target_count++)) || true; fi
+  done < <(_collect_targets)
+  (( target_count > 0 )) || { echo "No enabled features selected."; return 0; }
+  [[ "$all_features" == true ]] || _validate_uninstall_core "${targets[@]}"
+  _validate_uninstall_dependencies "${targets[@]}"
+  local index
+  for ((index=target_count-1; index>=0; index--)); do reversed+=("${targets[$index]}"); done
+  echo "Will uninstall: ${reversed[*]}"
+  [[ "$purge" == true ]] && echo "Purge will also remove mins-env-owned state, backups, and provider caches."
+  if [[ "$dry_run" == true ]]; then echo "Dry run: no changes made."; return 0; fi
+  if [[ "$assume_yes" == false ]]; then
+    [[ -t 0 && -t 1 ]] || die "Non-interactive uninstall requires --yes"
+    printf 'Continue? [y/N] '
+    read -r reply </dev/tty || reply=n
+    case "$reply" in y|Y|yes|YES) ;; *) return 0 ;; esac
+  fi
+  for feature in "${reversed[@]}"; do
+    rc=0
+    MINS_ENV_PURGE="$purge" mins_run_feature_handler "$feature" remove || rc=$?
+    if [[ $rc -eq 0 || $rc -eq $MINS_HANDLER_UNAVAILABLE ]]; then
+      [[ $rc -eq $MINS_HANDLER_UNAVAILABLE ]] && echo "  Retaining external resources for $feature (no remove handler)."
+      mins_state_feature_set "$feature" enabled false
+      mins_state_feature_set "$feature" status '"disabled"'
+    else
+      echo "  Failed to uninstall $feature" >&2
+      ((failed++)) || true
+    fi
+  done
+  if ! _reconcile_selection_consumers; then
+    echo "  Failed to reconcile feature-selected agent assets" >&2
+    ((failed++)) || true
+  fi
+  cmd_generate_env
+  if [[ "$all_features" == true && $failed -eq 0 ]]; then
+    _remove_launcher
+    rm -f "$(mins_state_dir)/$ENV_FILE_NAME"
+    mins_state_set installed false
+    if [[ "$purge" == true ]]; then rm -rf "$(mins_state_dir)" "${XDG_STATE_HOME:-$HOME/.local/state}/mins-env"; fi
+  fi
+  (( failed == 0 ))
+}
+
+cmd_secrets() {
+  local action="${1:-help}"
+  if [[ "$action" == help || "$action" == --help || "$action" == -h ]]; then
+    python3 "$MINS_ENV_ROOT/features/secrets.py" help
+    return
+  fi
+  if [[ "$action" =~ ^(push-key|pull-key)$ && "${2:-}" =~ ^(--help|-h)$ ]]; then
+    python3 "$MINS_ENV_ROOT/features/secrets.py" "$action" "${2}"
+    return
+  fi
+  _ensure_installed || return $?
+  mins_feature_exists secrets || die "This installation does not provide the secrets feature"
+  mins_feature_in_scope secrets || die "The secrets feature is unavailable on this platform"
+  [[ "$(mins_state_feature_get secrets enabled false 2>/dev/null || echo false)" == true ]] \
+    || die "The secrets feature is not installed; run 'mins-env install --reconfigure' and enable it first"
+  if [[ "$action" =~ ^(push-key|pull-key)$ ]]; then
+    _feature_dependencies_ready secrets \
+      || die "The secrets feature is not initialized; run 'mins-env upgrade --only chezmoi,mise --force' and retry"
+  fi
+  python3 "$MINS_ENV_ROOT/features/secrets.py" "$@"
+}
+
+cmd_help() {
+  cat <<'USAGE'
+mins-env - portable developer environment manager
+
+Usage: mins-env <command> [options]
+
+Global:
+  --bundle PATH       Add one explicit feature/resource bundle (repeatable)
+
+Commands:
+  install [--preset core|recommended] [--reconfigure] [--yes] [--dry-run]
+  upgrade [--only/-o FEATURES | --except/-e FEATURES] [--force] [--dry-run]
+  status [--json]
+  verify [--only/-o FEATURES | --except/-e FEATURES] [--json]
+  doctor [all|features|network|shell|state|FEATURE...] [--verbose] [--json]
+  secrets {push-key|pull-key} HOST [--force] [--yes] [--restore]
+  uninstall [--only/-o FEATURES | --except/-e FEATURES] [--purge] [--yes] [--dry-run]
+
+FEATURES may be comma-separated or supplied with repeated flags. Upgrade defaults
+to every feature selected during install. The repository checkout itself is never
+updated automatically.
+USAGE
+}
+
+main() {
+  local command="${1:-help}"
+  export MINS_ENV_DRY_RUN=false
+  shift 2>/dev/null || true
+  if [[ "$command" != help && "$command" != --help && "$command" != -h ]]; then
+    command -v python3 >/dev/null 2>&1 || die "python3 is required to run mins-env"
+  fi
+  case "$command" in
+    install) cmd_install "$@" ;;
+    upgrade) cmd_upgrade "$@" ;;
+    status) cmd_status "$@" ;;
+    verify) cmd_verify "$@" ;;
+    doctor) cmd_doctor "$@" ;;
+    secrets) cmd_secrets "$@" ;;
+    uninstall) cmd_uninstall "$@" ;;
+    generate-env) _ensure_installed && cmd_generate_env ;;
+    help|--help|-h) cmd_help ;;
+    *) die "Unknown command: $command. Run 'mins-env help'." ;;
+  esac
+}
+
+main "$@"

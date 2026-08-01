@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Enrich a tmux-resurrect state file with durable agent resume commands."""
+
+from __future__ import annotations
+
+import os
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
+AGENTS = {"claude", "codex", "pi"}
+
+
+def tmux_lines(*arguments: str) -> list[str]:
+    result = subprocess.run(
+        ["tmux", *arguments],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    return result.stdout.splitlines() if result.returncode == 0 else []
+
+
+def pane_metadata() -> dict[tuple[str, str, str], tuple[str, str, str]]:
+    format_string = "\t".join(
+        (
+            "#{session_name}",
+            "#{window_index}",
+            "#{pane_index}",
+            "#{@mins_agent_schema}",
+            "#{@mins_agent_kind}",
+            "#{@mins_agent_session_id}",
+        )
+    )
+    result: dict[tuple[str, str, str], tuple[str, str, str]] = {}
+    for line in tmux_lines("list-panes", "-a", "-F", format_string):
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        result[(fields[0], fields[1], fields[2])] = (fields[3], fields[4], fields[5])
+    return result
+
+
+def transient_grouped_sessions() -> set[str]:
+    format_string = "\t".join(("#{session_name}", "#{@tmux_resume_transient}"))
+    result: set[str] = set()
+    for line in tmux_lines("list-sessions", "-F", format_string):
+        fields = line.split("\t")
+        if len(fields) == 2 and fields[1] == "1":
+            result.add(fields[0])
+    return result
+
+
+def rewrite(path: Path) -> None:
+    panes = pane_metadata()
+    transient = transient_grouped_sessions()
+    original = path.read_text(encoding="utf-8")
+    output: list[str] = []
+
+    for raw_line in original.splitlines():
+        fields = raw_line.split("\t")
+        if (
+            fields[:1] == ["grouped_session"]
+            and len(fields) > 1
+            and fields[1] in transient
+        ):
+            continue
+        if fields[:1] == ["pane"] and len(fields) >= 11:
+            schema, agent, session_id = panes.get(
+                (fields[1], fields[2], fields[5]), ("", "", "")
+            )
+            if (
+                schema == "1"
+                and agent in AGENTS
+                and SESSION_ID_RE.fullmatch(session_id)
+            ):
+                fields[10] = f":mins-agent-resume v1 {agent} {session_id}"
+                raw_line = "\t".join(fields)
+        output.append(raw_line)
+
+    updated = "\n".join(output) + ("\n" if original.endswith("\n") else "")
+    if updated == original:
+        return
+
+    mode = stat.S_IMODE(path.stat().st_mode)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(updated)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("usage: mins-tmux-snapshot RESURRECT_STATE_FILE", file=sys.stderr)
+        return 2
+    path = Path(sys.argv[1])
+    if not path.is_file():
+        print(f"mins-tmux-snapshot: state file not found: {path}", file=sys.stderr)
+        return 1
+    try:
+        rewrite(path)
+    except (OSError, UnicodeError, subprocess.SubprocessError) as error:
+        print(f"mins-tmux-snapshot: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

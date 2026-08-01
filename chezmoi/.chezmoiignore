@@ -1,0 +1,5 @@
+{{/* Alacritty is managed only on macOS by the default terminal feature. */ -}}
+README.md
+{{ if ne .chezmoi.os "darwin" }}
+.config/alacritty/alacritty.toml
+{{ end }}

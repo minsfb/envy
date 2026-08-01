@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "distribution_feature": "agent-assets",
+  "destinations": {
+    "claude": {
+      "skills": "~/.claude/skills",
+      "agents": "~/.claude/agents"
+    },
+    "codex": {
+      "skills": "~/.agents/skills"
+    }
+  },
+  "plugin_audit": false,
+  "audit_roots": [],
+  "skill_groups": [
+    {
+      "name": "common",
+      "path": "agent-assets/skills",
+      "targets": ["claude", "codex"]
+    }
+  ],
+  "agent_groups": [
+    {
+      "name": "common-agents",
+      "path": "agent-assets/agents",
+      "targets": ["claude"]
+    }
+  ]
+}

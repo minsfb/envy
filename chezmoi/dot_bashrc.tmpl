@@ -1,0 +1,36 @@
+# .bashrc — managed by mins-env/chezmoi
+
+export PATH="$HOME/.local/bin:$PATH"
+[ -f {{ (joinPath .xdgConfigHome "mins-env/init-sh.env") | quote }} ] && source {{ (joinPath .xdgConfigHome "mins-env/init-sh.env") | quote }}
+
+_mins_shell_dir={{ (joinPath .xdgConfigHome "mins-env/shell.d") | quote }}
+if [ -d "$_mins_shell_dir" ]; then
+  for _mins_fragment in "$_mins_shell_dir"/*.pre.bash; do
+    [ -f "$_mins_fragment" ] && source "$_mins_fragment"
+  done
+fi
+
+case $- in
+  *i*)
+    if [ -z "${ZSH_VERSION:-}" ] && [ -z "${MINS_NO_ZSH:-}" ] \
+      && [ -z "${MINS_BASH_EXECD:-}" ] && command -v zsh >/dev/null 2>&1; then
+      export MINS_BASH_EXECD=1
+      exec zsh
+    fi
+    ;;
+esac
+
+command -v mise >/dev/null && eval "$(mise activate bash)"
+
+if [ -d "$_mins_shell_dir" ]; then
+  for _mins_fragment in "$_mins_shell_dir"/*.bash; do
+    case "$_mins_fragment" in *.pre.bash) ;; *) [ -f "$_mins_fragment" ] && source "$_mins_fragment" ;; esac
+  done
+fi
+unset _mins_fragment _mins_shell_dir
+
+[ -n "${MINS_SECRETS_FILE:-}" ] && [ -f "$MINS_SECRETS_FILE" ] && source "$MINS_SECRETS_FILE"
+[ -f ~/.bashrc.local ] && source ~/.bashrc.local
+command -v bat >/dev/null && alias cat='bat --paging=never --style=plain'
+command -v glow >/dev/null && alias md='glow'
+[ -f {{ (joinPath .xdgConfigHome "mins-env/tmux-autoattach.sh") | quote }} ] && source {{ (joinPath .xdgConfigHome "mins-env/tmux-autoattach.sh") | quote }}

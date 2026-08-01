@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Serialize every manual, lifecycle, and Continuum tmux-resurrect save.
+set -u
+
+marker="${XDG_CONFIG_HOME:-$HOME/.config}/mins-env/tmux-persistence.enabled"
+[[ -f "$marker" ]] || exit 0
+command -v tmux >/dev/null 2>&1 || exit 0
+umask 077
+
+server_pid=$(tmux display-message -p '#{pid}' 2>/dev/null) || exit 0
+runtime_dir=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}
+lock_dir="$runtime_dir/mins-tmux-save-${UID:-$(id -u)}-$server_pid.lock"
+
+if ! mkdir "$lock_dir" 2>/dev/null; then
+  exit 0
+fi
+trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT INT HUP TERM
+
+save_script=$(tmux show-option -gqv @mins_resurrect-save-script 2>/dev/null)
+[[ -n "$save_script" && -x "$save_script" ]] || exit 0
+
+"$save_script" "${1:-}"

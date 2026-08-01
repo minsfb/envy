@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Emit BEL through the originating tmux pane without writing into hook stdout.
+set -u
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+MARKER="$CONFIG_HOME/mins-env/agent-notifications.enabled"
+testing=false
+
+if [[ "${1:-}" == --test ]]; then
+  testing=true
+  shift
+fi
+
+if [[ "$testing" != true ]]; then
+  [[ -r "$MARKER" ]] || exit 0
+  adapters="$(sed -n 's/^adapters=//p' "$MARKER" | head -n 1)"
+  condition="$(sed -n 's/^condition=//p' "$MARKER" | head -n 1)"
+  condition="${condition:-unfocused}"
+
+  if (($#)); then
+    matched=false
+    for adapter in "$@"; do
+      case ",$adapters," in
+        *",$adapter,"*) matched=true; break ;;
+      esac
+    done
+    [[ "$matched" == true ]] || exit 0
+  fi
+
+  if [[ "$condition" == unfocused && -n "${TMUX_PANE:-}" ]] && command -v tmux >/dev/null 2>&1; then
+    window="$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null || true)"
+    if [[ -n "$window" ]]; then
+      while IFS='|' read -r client_window flags; do
+        if [[ "$client_window" == "$window" && ",$flags," == *,focused,* ]]; then
+          exit 0
+        fi
+      done < <(tmux list-clients -F '#{window_id}|#{client_flags}' 2>/dev/null || true)
+    fi
+  fi
+fi
+
+if [[ -n "${TMUX_PANE:-}" ]] && command -v tmux >/dev/null 2>&1; then
+  pane_tty="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null || true)"
+  if [[ -n "$pane_tty" && -w "$pane_tty" ]] && printf '\a' >"$pane_tty" 2>/dev/null; then
+    exit 0
+  fi
+fi
+
+printf '\a' 2>/dev/null >/dev/tty || true
+exit 0

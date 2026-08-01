@@ -1,0 +1,144 @@
+{
+  "version": 3,
+  "id": "mins-env-core",
+  "bundle_version": "0.1.0",
+  "presets": {
+    "core": "Required merge, managed-file, toolchain, and path foundation",
+    "recommended": "Core plus portable terminal, persistence, and agent-asset features"
+  },
+  "recommended_features": [
+    "terminal",
+    "agent-notifications",
+    "tmux-persistence",
+    "agent-assets"
+  ],
+  "aliases": {
+    "claude-skills": "agent-assets"
+  },
+  "resources": {
+    "chezmoi_sources": ["chezmoi"],
+    "agent_asset_manifests": ["assets/agent-assets.json"]
+  },
+  "settings": {
+    "secrets": {
+      "sources": []
+    },
+    "tmux_persistence": {
+      "agent_adapters": ["claude", "codex", "pi"]
+    },
+    "agent_notifications": {
+      "adapters": ["claude", "codex", "metacode", "pi"],
+      "condition": "unfocused"
+    }
+  },
+  "features": {
+    "smart-merge": {
+      "description": "Repository-neutral algorithmic merge with optional agent fallback",
+      "tier": "core",
+      "default_enabled": true,
+      "scope": {"global": true},
+      "converge": {"run": "features/smart-merge.sh", "args": ["converge"]},
+      "verify": {"run": "features/smart-merge.sh", "args": ["verify"]},
+      "doctor": {"run": "features/smart-merge.sh", "args": ["doctor"]},
+      "remove": {"run": "features/smart-merge.sh", "args": ["remove"]}
+    },
+    "chezmoi": {
+      "description": "Managed shell, tmux, terminal, and Mise configuration",
+      "tier": "core",
+      "default_enabled": true,
+      "scope": {"global": true},
+      "depends_on": ["smart-merge"],
+      "converge": {"run": "features/chezmoi.sh", "args": ["converge"]},
+      "verify": {"run": "features/chezmoi.sh", "args": ["verify"]},
+      "doctor": {"run": "features/chezmoi.sh", "args": ["doctor"]},
+      "remove": {"run": "features/chezmoi.sh", "args": ["remove"]}
+    },
+    "mise": {
+      "description": "Pinned developer toolchain from the active Mise configuration",
+      "tier": "core",
+      "default_enabled": true,
+      "scope": {"unix": true, "git-bash": true},
+      "depends_on": ["chezmoi"],
+      "converge": {"run": "features/mise.sh", "args": ["converge"]},
+      "verify": {"run": "features/mise.sh", "args": ["verify"]},
+      "doctor": {"run": "features/mise.sh", "args": ["doctor"]},
+      "remove": {"run": "features/mise.sh", "args": ["remove"]}
+    },
+    "path": {
+      "description": "mins-env commands and configured command roots on PATH",
+      "tier": "core",
+      "default_enabled": true,
+      "scope": {"global": true},
+      "converge": {"run": "features/path.sh", "args": ["converge"]},
+      "verify": {"run": "features/path.sh", "args": ["verify"]},
+      "doctor": {"run": "features/path.sh", "args": ["doctor"]},
+      "remove": {"run": "features/path.sh", "args": ["remove"]},
+      "env": {"PATH+": "${MINS_ENV_ROOT}/bin"}
+    },
+    "terminal": {
+      "description": "Zsh and tmux everywhere, with Alacritty on macOS",
+      "tier": "recommended",
+      "default_enabled": true,
+      "scope": {"darwin": true, "linux": true, "wsl": true},
+      "depends_on": ["chezmoi"],
+      "converge": {"run": "features/terminal.sh", "args": ["converge"]},
+      "verify": {"run": "features/terminal.sh", "args": ["verify"]},
+      "doctor": {"run": "features/terminal.sh", "args": ["doctor"]},
+      "remove": {"run": "features/terminal.sh", "args": ["remove"]}
+    },
+    "agent-notifications": {
+      "description": "Route agent completion and attention alerts through the terminal bell",
+      "tier": "recommended",
+      "default_enabled": true,
+      "scope": {"darwin": true, "linux": true, "wsl": true},
+      "depends_on": ["chezmoi", "terminal"],
+      "converge": {"run": "features/agent-notifications.py", "args": ["converge"]},
+      "verify": {"run": "features/agent-notifications.py", "args": ["verify"]},
+      "doctor": {"run": "features/agent-notifications.py", "args": ["doctor"]},
+      "remove": {"run": "features/agent-notifications.py", "args": ["remove"]}
+    },
+    "tmux-persistence": {
+      "description": "Continuously save tmux layouts and resume agent sessions",
+      "tier": "recommended",
+      "default_enabled": true,
+      "scope": {"darwin": true, "linux": true, "wsl": true},
+      "depends_on": ["chezmoi", "terminal"],
+      "converge": {"run": "features/tmux-persistence.py", "args": ["converge"]},
+      "verify": {"run": "features/tmux-persistence.py", "args": ["verify"]},
+      "doctor": {"run": "features/tmux-persistence.py", "args": ["doctor"]},
+      "remove": {"run": "features/tmux-persistence.py", "args": ["remove"]}
+    },
+    "agent-assets": {
+      "description": "Synchronize selected skills and agents with ownership tracking",
+      "tier": "recommended",
+      "default_enabled": true,
+      "scope": {"unix": true},
+      "converge": {"run": "features/agent-assets.py", "args": ["converge"]},
+      "verify": {"run": "features/agent-assets.py", "args": ["verify"]},
+      "doctor": {"run": "features/agent-assets.py", "args": ["doctor"]},
+      "remove": {"run": "features/agent-assets.py", "args": ["remove"]},
+      "reconcile_after_selection_change": true
+    },
+    "adb": {
+      "description": "Select and configure an existing Android SDK",
+      "tier": "optional",
+      "default_enabled": false,
+      "scope": {"darwin": true, "linux": true, "git-bash": true},
+      "converge": {"run": "features/adb.py", "args": ["converge"]},
+      "verify": {"run": "features/adb.py", "args": ["verify"]},
+      "doctor": {"run": "features/adb.py", "args": ["doctor"]},
+      "remove": {"run": "features/adb.py", "args": ["remove"]}
+    },
+    "secrets": {
+      "description": "Restore a local secrets file exclusively from SOPS+age sources",
+      "tier": "optional",
+      "default_enabled": false,
+      "scope": {"global": true},
+      "depends_on": ["mise"],
+      "converge": {"run": "features/secrets.py", "args": ["converge"]},
+      "verify": {"run": "features/secrets.py", "args": ["verify"]},
+      "doctor": {"run": "features/secrets.py", "args": ["doctor"]},
+      "remove": {"run": "features/secrets.py", "args": ["remove"]}
+    }
+  }
+}

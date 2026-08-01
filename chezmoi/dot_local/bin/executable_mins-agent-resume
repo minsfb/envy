@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Resume a saved agent session from a versioned, vendor-neutral command."""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import sys
+
+
+SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
+COMMANDS = {
+    "claude": lambda session_id: ["claude", "--resume", session_id],
+    "codex": lambda session_id: ["codex", "resume", session_id],
+    "pi": lambda session_id: ["pi", "--session", session_id],
+}
+
+
+def usage() -> int:
+    print(
+        "usage: mins-agent-resume [--print-command] v1 {claude|codex|pi} SESSION_ID",
+        file=sys.stderr,
+    )
+    return 2
+
+
+def main() -> int:
+    arguments = sys.argv[1:]
+    print_command = False
+    if arguments[:1] == ["--print-command"]:
+        print_command = True
+        arguments = arguments[1:]
+    if len(arguments) != 3 or arguments[0] != "v1":
+        return usage()
+
+    agent, session_id = arguments[1:]
+    if agent not in COMMANDS or not SESSION_ID_RE.fullmatch(session_id):
+        return usage()
+    command = COMMANDS[agent](session_id)
+    executable = shutil.which(command[0])
+    if not executable:
+        print(f"mins-agent-resume: command not found: {command[0]}", file=sys.stderr)
+        return 127
+    command[0] = executable
+
+    if print_command:
+        print(json.dumps(command))
+        return 0
+    os.execv(executable, command)
+    return 127
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

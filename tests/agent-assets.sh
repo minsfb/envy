@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEMP="$(mktemp -d)"
+trap 'rm -rf "$TEMP"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+HOME_DIR="$TEMP/home"
+ASSETS="$TEMP/assets"
+mkdir -p "$HOME_DIR/.config/mins-env" "$ASSETS/extra/example"
+cat >"$ASSETS/extra/example/SKILL.md" <<'EOF'
+---
+name: example
+description: Example additional skill.
+---
+# Example
+EOF
+cat >"$ASSETS/manifest.json" <<EOF
+{
+  "version": 1,
+  "distribution_feature": "agent-assets",
+  "destinations": {
+    "claude": {"skills": "~/.claude/skills"},
+    "codex": {"skills": "~/.agents/skills"}
+  },
+  "skill_groups": [
+    {"name": "extra", "path": "extra", "targets": ["claude", "codex"]}
+  ]
+}
+EOF
+cat >"$HOME_DIR/.config/mins-env/state.json" <<'EOF'
+{
+  "schema_version": 3,
+  "installed": true,
+  "platform": "linux",
+  "features": {"agent-assets": {"enabled": true}}
+}
+EOF
+cat >"$TEMP/resolved.json" <<EOF
+{
+  "resources": {
+    "agent_asset_manifests": [
+      "$ROOT/assets/agent-assets.json",
+      "$ASSETS/manifest.json"
+    ]
+  }
+}
+EOF
+
+ENVIRONMENT=(
+  HOME="$HOME_DIR"
+  MINS_PLATFORM=linux
+  MINS_ENV_MANIFEST="$TEMP/resolved.json"
+  MINS_ENV_STATE_FILE="$HOME_DIR/.config/mins-env/state.json"
+)
+env "${ENVIRONMENT[@]}" "$ROOT/features/agent-assets.py" converge >/dev/null
+[[ -L "$HOME_DIR/.claude/skills/handoff" ]] || fail 'core Claude skill was not linked'
+[[ -L "$HOME_DIR/.agents/skills/handoff" ]] || fail 'core Codex skill was not linked'
+[[ -L "$HOME_DIR/.claude/skills/example" ]] || fail 'additional Claude skill was not linked'
+env "${ENVIRONMENT[@]}" "$ROOT/features/agent-assets.py" verify >/dev/null
+
+mkdir -p "$HOME_DIR/.claude/skills/foreign"
+printf 'keep\n' >"$HOME_DIR/.claude/skills/foreign/SKILL.md"
+env "${ENVIRONMENT[@]}" "$ROOT/features/agent-assets.py" remove >/dev/null
+[[ ! -e "$HOME_DIR/.claude/skills/handoff" ]] || fail 'managed core link was retained'
+[[ ! -e "$HOME_DIR/.claude/skills/example" ]] || fail 'managed additional link was retained'
+[[ -f "$HOME_DIR/.claude/skills/foreign/SKILL.md" ]] || fail 'foreign skill was removed'
+
+echo "agent asset standalone tests passed"

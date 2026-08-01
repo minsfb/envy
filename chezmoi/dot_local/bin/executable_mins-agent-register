@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""Register an agent session against the current tmux pane.
+
+Claude and Codex invoke this command from lifecycle hooks. Pi invokes it from
+the managed extension. The command is deliberately best-effort: agent startup
+must never fail because tmux persistence is unavailable.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+
+SCHEMA_VERSION = 1
+AGENTS = {"claude", "codex", "pi"}
+SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
+PANE_OPTIONS = (
+    "@mins_agent_schema",
+    "@mins_agent_kind",
+    "@mins_agent_session_id",
+    "@mins_agent_cwd",
+    "@mins_agent_transcript",
+)
+
+
+def config_home() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+def state_home() -> Path:
+    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+
+
+def feature_enabled() -> bool:
+    return (config_home() / "mins-env" / "tmux-persistence.enabled").is_file()
+
+
+def valid_text(value: Any, *, absolute: bool = False) -> str:
+    if not isinstance(value, str) or len(value) > 4096:
+        return ""
+    if any(character in value for character in ("\0", "\n", "\r", "\t")):
+        return ""
+    if absolute and value and not Path(value).is_absolute():
+        return ""
+    return value
+
+
+def tmux(*arguments: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["tmux", *arguments],
+        check=False,
+        stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+
+
+def pane_option(pane: str, name: str) -> str:
+    result = tmux("show-option", "-p", "-q", "-v", "-t", pane, name, capture=True)
+    return result.stdout.rstrip("\n") if result.returncode == 0 else ""
+
+
+def set_pane_option(pane: str, name: str, value: str) -> None:
+    tmux("set-option", "-p", "-q", "-t", pane, name, value)
+
+
+def unset_pane_option(pane: str, name: str) -> None:
+    tmux("set-option", "-p", "-q", "-u", "-t", pane, name)
+
+
+def record_path(agent: str, session_id: str) -> Path:
+    return state_home() / "mins-env" / "agent-sessions" / agent / f"{session_id}.json"
+
+
+def atomic_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temporary, path)
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def read_record(path: Path) -> dict[str, Any]:
+    try:
+        with path.open(encoding="utf-8") as handle:
+            value = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def persist_record(
+    agent: str,
+    session_id: str,
+    pane: str,
+    cwd: str,
+    transcript_path: str,
+    active: bool,
+) -> None:
+    path = record_path(agent, session_id)
+    value = read_record(path)
+    value.update(
+        {
+            "schema": SCHEMA_VERSION,
+            "agent": agent,
+            "session_id": session_id,
+            "tmux_pane": pane,
+            "active": active,
+            "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+    )
+    if cwd or "cwd_hint" not in value:
+        value["cwd_hint"] = cwd
+    if transcript_path or "transcript_path" not in value:
+        value["transcript_path"] = transcript_path
+    atomic_json(path, value)
+
+
+def request_snapshot() -> None:
+    helper = Path.home() / ".local" / "bin" / "mins-tmux-save"
+    if not helper.is_file():
+        return
+    subprocess.Popen(
+        [str(helper), "quiet"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def load_input() -> dict[str, Any]:
+    payload = sys.stdin.buffer.read(1024 * 1024 + 1)
+    if len(payload) > 1024 * 1024:
+        return {}
+    try:
+        value = json.loads(payload or b"{}")
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def register(agent: str, action: str, value: dict[str, Any]) -> None:
+    pane = valid_text(os.environ.get("TMUX_PANE", ""))
+    if not pane or tmux("display-message", "-p", "-t", pane, "#{pane_id}").returncode:
+        return
+
+    session_id = valid_text(value.get("session_id"))
+    if not SESSION_ID_RE.fullmatch(session_id):
+        return
+    cwd = valid_text(value.get("cwd"), absolute=True)
+    transcript_path = valid_text(value.get("transcript_path"), absolute=True)
+
+    if action == "start":
+        set_pane_option(pane, "@mins_agent_schema", str(SCHEMA_VERSION))
+        set_pane_option(pane, "@mins_agent_kind", agent)
+        set_pane_option(pane, "@mins_agent_session_id", session_id)
+        set_pane_option(pane, "@mins_agent_cwd", cwd)
+        set_pane_option(pane, "@mins_agent_transcript", transcript_path)
+        persist_record(agent, session_id, pane, cwd, transcript_path, True)
+        request_snapshot()
+        return
+
+    pane_matches = pane_option(pane, "@mins_agent_session_id") == session_id
+    persist_record(agent, session_id, pane, cwd, transcript_path, False)
+    if not pane_matches:
+        return
+    for option in PANE_OPTIONS:
+        unset_pane_option(pane, option)
+    request_snapshot()
+
+
+def main() -> int:
+    if len(sys.argv) != 3 or sys.argv[1] not in AGENTS or sys.argv[2] not in {"start", "end"}:
+        return 0
+    if not feature_enabled() or not os.environ.get("TMUX_PANE"):
+        return 0
+    try:
+        register(sys.argv[1], sys.argv[2], load_input())
+    except (OSError, subprocess.SubprocessError):
+        # Lifecycle hooks are advisory. Never make the agent fail to start.
+        return 0
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

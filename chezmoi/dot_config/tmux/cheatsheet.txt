@@ -1,0 +1,51 @@
+
+  ┌────────────────────────────────────────────────────────────────┐
+  │                        tmux cheat sheet                          │
+  └────────────────────────────────────────────────────────────────┘
+
+  PREFIX is  Ctrl-b  →  press & release it, THEN tap the key below.
+  Forgot a key? Just hit  Ctrl-b Space  for the clickable menu.
+
+  ── the two you'll use most ──────────────────────────────────────
+    Ctrl-b Space      open the action menu (everything is in here)
+    Ctrl-b d          detach — session keeps running in background
+
+  ── panes (splits) ───────────────────────────────────────────────
+    Ctrl-b |          split vertical   (side by side)
+    Ctrl-b -          split horizontal (top / bottom)
+    Ctrl-b h j k l    move to pane  left / down / up / right
+    Ctrl-b H J K L    resize pane   (repeatable — keep tapping)
+    Ctrl-b z          zoom pane fullscreen / restore
+    Ctrl-b o          cycle to next pane
+    Ctrl-b x          close pane
+    (or just click a pane / drag its border with the mouse)
+
+  ── windows (tabs) ───────────────────────────────────────────────
+    Ctrl-b c          new window
+    Ctrl-b 1..9       jump to window by number
+    Ctrl-b n / p      next / previous window
+    Ctrl-b ,          rename window
+    Ctrl-b &          close window
+
+  ── sessions (the remote-reconnect magic) ────────────────────────
+    Ctrl-b d          detach (leaves everything running)
+    Ctrl-b w          switch / list sessions
+    Ctrl-b R          rename session
+                      ... from the shell:
+    tmux new -A -s work    create OR reattach to session "work"
+    tmux ls                list running sessions
+    tmux attach -t work    reattach to "work"
+
+  ── scroll & copy ────────────────────────────────────────────────
+    scroll wheel      scroll back through history
+    drag to select    highlight and keep the selection
+    click              clear selection and exit copy mode
+    Ctrl-c / y        copy selection to your local clipboard
+    Shift-drag        native terminal selection (then Cmd-c on macOS)
+    Ctrl-b [          enter scroll/copy mode      q  to exit
+
+  ── housekeeping ─────────────────────────────────────────────────
+    Ctrl-b ?          this cheat sheet
+    Ctrl-b r          reload ~/.tmux.conf
+
+                      press  q  to close this sheet
