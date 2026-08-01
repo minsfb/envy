@@ -193,6 +193,49 @@ with open(os.environ["FAKE_SCP_LOG"], "a", encoding="utf-8") as handle:
         self.assertEqual(secrets.verify(False), 0)
         self.assertEqual(secrets.doctor(), 0)
 
+    def test_first_converge_bootstraps_identity_and_source(self) -> None:
+        self.identity.unlink()
+        self.source.unlink()
+        self.configure()
+        self.target.parent.mkdir(parents=True, exist_ok=True)
+        self.target.write_bytes(b"EXAMPLE=private\n")
+        os.chmod(self.target, 0o600)
+        self.write_tool(
+            "age-keygen",
+            """#!/usr/bin/env python3
+import sys
+from pathlib import Path
+if "-o" in sys.argv:
+    Path(sys.argv[sys.argv.index("-o") + 1]).write_text("AGE-SECRET-KEY-GENERATED\\n")
+else:
+    print("age1testrecipient")
+""",
+        )
+        self.write_tool(
+            "sops",
+            """#!/usr/bin/env python3
+import os
+import sys
+if not os.environ.get("SOPS_AGE_KEY_FILE"):
+    raise SystemExit(2)
+if "--encrypt" in sys.argv:
+    if "--age" not in sys.argv:
+        raise SystemExit(2)
+    sys.stdout.buffer.write(b"sops age ENC[fixture]\\n")
+    raise SystemExit(0)
+if "--decrypt" in sys.argv:
+    sys.stdout.buffer.write(b"EXAMPLE=private\\n")
+    raise SystemExit(0)
+raise SystemExit(2)
+""",
+        )
+        self.assertEqual(secrets.converge(), 0)
+        self.assertTrue(self.identity.is_file())
+        self.assertEqual(stat.S_IMODE(self.identity.stat().st_mode), 0o600)
+        self.assertTrue(self.source.is_file())
+        self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o600)
+        self.assertEqual(secrets.verify(False), 0)
+
     def test_tools_resolve_through_mise_before_shell_activation(self) -> None:
         age = self.bin / "age"
         managed_age = self.root / "managed-age"
