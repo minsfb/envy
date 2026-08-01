@@ -1,40 +1,40 @@
 #!/usr/bin/env bash
-# mins-env - install, upgrade, verify, diagnose, and remove a portable dev environment.
+# envy - install, upgrade, verify, diagnose, and remove a portable dev environment.
 set -euo pipefail
 
-MINS_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MINS_ENV_DIR="$MINS_ENV_ROOT"
-export MINS_ENV_ROOT MINS_ENV_DIR
+ENVY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENVY_DIR="$ENVY_ROOT"
+export ENVY_ROOT ENVY_DIR
 
-_MINS_RAW_ARGS=("$@")
-_MINS_COMMAND_ARGS=()
-_MINS_BUNDLES=()
-_MINS_INDEX=0
-while (( _MINS_INDEX < ${#_MINS_RAW_ARGS[@]} )); do
-  _MINS_ARG="${_MINS_RAW_ARGS[$_MINS_INDEX]}"
-  case "$_MINS_ARG" in
+_ENVY_RAW_ARGS=("$@")
+_ENVY_COMMAND_ARGS=()
+_ENVY_BUNDLES=()
+_ENVY_INDEX=0
+while (( _ENVY_INDEX < ${#_ENVY_RAW_ARGS[@]} )); do
+  _ENVY_ARG="${_ENVY_RAW_ARGS[$_ENVY_INDEX]}"
+  case "$_ENVY_ARG" in
     --bundle)
-      ((_MINS_INDEX++)) || true
-      (( _MINS_INDEX < ${#_MINS_RAW_ARGS[@]} )) || {
+      ((_ENVY_INDEX++)) || true
+      (( _ENVY_INDEX < ${#_ENVY_RAW_ARGS[@]} )) || {
         echo "Error: --bundle requires a path" >&2
         exit 2
       }
-      _MINS_BUNDLES+=("${_MINS_RAW_ARGS[$_MINS_INDEX]}")
+      _ENVY_BUNDLES+=("${_ENVY_RAW_ARGS[$_ENVY_INDEX]}")
       ;;
-    --bundle=*) _MINS_BUNDLES+=("${_MINS_ARG#*=}") ;;
-    *) _MINS_COMMAND_ARGS+=("$_MINS_ARG") ;;
+    --bundle=*) _ENVY_BUNDLES+=("${_ENVY_ARG#*=}") ;;
+    *) _ENVY_COMMAND_ARGS+=("$_ENVY_ARG") ;;
   esac
-  ((_MINS_INDEX++)) || true
+  ((_ENVY_INDEX++)) || true
 done
-set -- ${_MINS_COMMAND_ARGS[0]+"${_MINS_COMMAND_ARGS[@]}"}
-unset _MINS_RAW_ARGS _MINS_COMMAND_ARGS _MINS_INDEX _MINS_ARG
+set -- ${_ENVY_COMMAND_ARGS[0]+"${_ENVY_COMMAND_ARGS[@]}"}
+unset _ENVY_RAW_ARGS _ENVY_COMMAND_ARGS _ENVY_INDEX _ENVY_ARG
 
-if [[ -z "${_MINS_BUNDLES[0]+set}" ]]; then
-  _MINS_EARLY_STATE="${XDG_CONFIG_HOME:-$HOME/.config}/mins-env/state.json"
-  if [[ -f "$_MINS_EARLY_STATE" ]]; then
-    while IFS= read -r _MINS_STORED_BUNDLE; do
-      [[ -n "$_MINS_STORED_BUNDLE" ]] && _MINS_BUNDLES+=("$_MINS_STORED_BUNDLE")
-    done < <(python3 - "$_MINS_EARLY_STATE" <<'PY' 2>/dev/null || true
+if [[ -z "${_ENVY_BUNDLES[0]+set}" ]]; then
+  _ENVY_EARLY_STATE="${XDG_CONFIG_HOME:-$HOME/.config}/envy/state.json"
+  if [[ -f "$_ENVY_EARLY_STATE" ]]; then
+    while IFS= read -r _ENVY_STORED_BUNDLE; do
+      [[ -n "$_ENVY_STORED_BUNDLE" ]] && _ENVY_BUNDLES+=("$_ENVY_STORED_BUNDLE")
+    done < <(python3 - "$_ENVY_EARLY_STATE" <<'PY' 2>/dev/null || true
 import json,sys
 for item in json.load(open(sys.argv[1])).get("bundles", []):
     if not item.get("core") and item.get("path"):
@@ -42,23 +42,23 @@ for item in json.load(open(sys.argv[1])).get("bundles", []):
 PY
     )
   fi
-  unset _MINS_EARLY_STATE _MINS_STORED_BUNDLE
+  unset _ENVY_EARLY_STATE _ENVY_STORED_BUNDLE
 fi
 
 # shellcheck source=lib/features.sh
-source "$MINS_ENV_ROOT/lib/features.sh"
-mins_manifest_init ${_MINS_BUNDLES[0]+"${_MINS_BUNDLES[@]}"}
+source "$ENVY_ROOT/lib/features.sh"
+nv_manifest_init ${_ENVY_BUNDLES[0]+"${_ENVY_BUNDLES[@]}"}
 # shellcheck source=lib/state.sh
-source "$MINS_ENV_ROOT/lib/state.sh"
+source "$ENVY_ROOT/lib/state.sh"
 
 readonly ENV_FILE_NAME="init-sh.env"
 SELECT_ONLY=()
 SELECT_EXCEPT=()
-_MINS_ENV_TEMP_STATE=""
+_ENVY_TEMP_STATE=""
 
 _cleanup_all() {
-  [[ -n "$_MINS_ENV_TEMP_STATE" ]] && rm -f "$_MINS_ENV_TEMP_STATE"
-  mins_manifest_cleanup
+  [[ -n "$_ENVY_TEMP_STATE" ]] && rm -f "$_ENVY_TEMP_STATE"
+  nv_manifest_cleanup
 }
 trap '_cleanup_all' EXIT
 
@@ -71,34 +71,34 @@ _json_quote() {
 
 _current_commit() {
   local commit
-  commit="$(git -C "$MINS_ENV_ROOT" rev-parse --short HEAD 2>/dev/null)" || { echo unknown; return; }
-  if [[ -n "$(git -C "$MINS_ENV_ROOT" status --porcelain 2>/dev/null)" ]]; then
+  commit="$(git -C "$ENVY_ROOT" rev-parse --short HEAD 2>/dev/null)" || { echo unknown; return; }
+  if [[ -n "$(git -C "$ENVY_ROOT" status --porcelain 2>/dev/null)" ]]; then
     commit="$commit-dirty"
   fi
   echo "$commit"
 }
 
 _prepare_state() {
-  if mins_state_exists; then
-    if [[ "${MINS_ENV_DRY_RUN:-false}" == true && -z "$_MINS_ENV_TEMP_STATE" ]]; then
-      _MINS_ENV_TEMP_STATE="$(mktemp)"
-      cp "$(mins_state_file)" "$_MINS_ENV_TEMP_STATE"
-      _MINS_STATE_FILE="$_MINS_ENV_TEMP_STATE"
-      MINS_ENV_STATE_FILE="$_MINS_ENV_TEMP_STATE"
-      export MINS_ENV_STATE_FILE
+  if nv_state_exists; then
+    if [[ "${ENVY_DRY_RUN:-false}" == true && -z "$_ENVY_TEMP_STATE" ]]; then
+      _ENVY_TEMP_STATE="$(mktemp)"
+      cp "$(nv_state_file)" "$_ENVY_TEMP_STATE"
+      _ENVY_STATE_FILE="$_ENVY_TEMP_STATE"
+      ENVY_STATE_FILE="$_ENVY_TEMP_STATE"
+      export ENVY_STATE_FILE
     fi
-    mins_state_migrate "$(mins_manifest_file)" "$MINS_PLATFORM" "$MINS_SHELL" "$MINS_ENV_ROOT"
-    if [[ "$(mins_state_get platform_hierarchy '""' 2>/dev/null || true)" \
-      != "$(mins_platform_hierarchy "$MINS_PLATFORM")" ]]; then
-      mins_state_set platform_hierarchy \
-        "$(_json_quote "$(mins_platform_hierarchy "$MINS_PLATFORM")")"
+    nv_state_migrate "$(nv_manifest_file)" "$ENVY_PLATFORM" "$ENVY_SHELL" "$ENVY_ROOT"
+    if [[ "$(nv_state_get platform_hierarchy '""' 2>/dev/null || true)" \
+      != "$(nv_platform_hierarchy "$ENVY_PLATFORM")" ]]; then
+      nv_state_set platform_hierarchy \
+        "$(_json_quote "$(nv_platform_hierarchy "$ENVY_PLATFORM")")"
     fi
-    if [[ "${MINS_ENV_DRY_RUN:-false}" != true && "$(mins_state_get installed false)" == true ]]; then
+    if [[ "${ENVY_DRY_RUN:-false}" != true && "$(nv_state_get installed false)" == true ]]; then
       if _launcher_current; then
-        if [[ "$(mins_state_get ownership.launcher.created false 2>/dev/null || echo false)" != true ]] \
-          || [[ "$(mins_state_get ownership.launcher.path '""' 2>/dev/null || true)" != "$HOME/.local/bin/mins-env" ]]; then
-          mins_state_set ownership.launcher.path "$(_json_quote "$HOME/.local/bin/mins-env")"
-          mins_state_set ownership.launcher.created true
+        if [[ "$(nv_state_get ownership.launcher.created false 2>/dev/null || echo false)" != true ]] \
+          || [[ "$(nv_state_get ownership.launcher.path '""' 2>/dev/null || true)" != "$HOME/.local/bin/envy" ]]; then
+          nv_state_set ownership.launcher.path "$(_json_quote "$HOME/.local/bin/envy")"
+          nv_state_set ownership.launcher.created true
         fi
       else
         _write_launcher
@@ -109,9 +109,9 @@ _prepare_state() {
 
 _ensure_installed() {
   _prepare_state
-  if ! mins_state_exists || [[ "$(mins_state_get installed false 2>/dev/null || echo false)" != true ]]; then
-    echo "mins-env is not installed for this checkout." >&2
-    echo "Run: $MINS_ENV_ROOT/bin/mins-env install" >&2
+  if ! nv_state_exists || [[ "$(nv_state_get installed false 2>/dev/null || echo false)" != true ]]; then
+    echo "envy is not installed for this checkout." >&2
+    echo "Run: $ENVY_ROOT/bin/envy install" >&2
     return 2
   fi
 }
@@ -148,14 +148,14 @@ _validate_selectors() {
   fi
   if _select_only_has_items; then
     for feature in "${SELECT_ONLY[@]}"; do
-      mins_feature_exists "$feature" || die "Unknown feature: $feature"
-      mins_feature_in_scope "$feature" || die "Feature '$feature' is unavailable on $MINS_PLATFORM"
+      nv_feature_exists "$feature" || die "Unknown feature: $feature"
+      nv_feature_in_scope "$feature" || die "Feature '$feature' is unavailable on $ENVY_PLATFORM"
     done
   fi
   if _select_except_has_items; then
     for feature in "${SELECT_EXCEPT[@]}"; do
-      mins_feature_exists "$feature" || die "Unknown feature: $feature"
-      mins_feature_in_scope "$feature" || die "Feature '$feature' is unavailable on $MINS_PLATFORM"
+      nv_feature_exists "$feature" || die "Unknown feature: $feature"
+      nv_feature_in_scope "$feature" || die "Feature '$feature' is unavailable on $ENVY_PLATFORM"
     done
   fi
 }
@@ -164,16 +164,16 @@ _validate_only_enabled() {
   local feature enabled
   _select_only_has_items || return 0
   for feature in "${SELECT_ONLY[@]}"; do
-    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
-    [[ "$enabled" == true ]] || die "Feature '$feature' is not enabled. Run 'mins-env install --reconfigure'."
+    enabled="$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+    [[ "$enabled" == true ]] || die "Feature '$feature' is not enabled. Run 'envy install --reconfigure'."
   done
 }
 
 _collect_targets() {
   local feature enabled
-  for feature in $(mins_list_features); do
-    mins_feature_in_scope "$feature" || continue
-    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+  for feature in $(nv_list_features); do
+    nv_feature_in_scope "$feature" || continue
+    enabled="$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
     [[ "$enabled" == true ]] || continue
     if _select_only_has_items; then
       _array_contains "$feature" "${SELECT_ONLY[@]}" || continue
@@ -189,7 +189,7 @@ _feature_dependencies_ready() {
   local feature="$1" dependency enabled selected rc
   while IFS= read -r dependency; do
     [[ -n "$dependency" ]] || continue
-    enabled="$(mins_state_feature_get "$dependency" enabled false 2>/dev/null || echo false)"
+    enabled="$(nv_state_feature_get "$dependency" enabled false 2>/dev/null || echo false)"
     if [[ "$enabled" != true ]]; then
       echo "Feature '$feature' requires disabled feature '$dependency'." >&2
       return 1
@@ -200,91 +200,91 @@ _feature_dependencies_ready() {
     elif _select_except_has_items && _array_contains "$dependency" "${SELECT_EXCEPT[@]}"; then
       selected=false
     fi
-    if [[ "${MINS_ENV_DRY_RUN:-false}" == true && "$selected" == true ]]; then
+    if [[ "${ENVY_DRY_RUN:-false}" == true && "$selected" == true ]]; then
       continue
     fi
-    if [[ "$selected" == true && "$(mins_state_feature_get "$dependency" status pending 2>/dev/null || echo pending)" == failed ]]; then
+    if [[ "$selected" == true && "$(nv_state_feature_get "$dependency" status pending 2>/dev/null || echo pending)" == failed ]]; then
       echo "Feature '$feature' requires failed dependency '$dependency'." >&2
       return 1
     fi
     rc=0
-    mins_verify_feature "$dependency" >/dev/null 2>&1 || rc=$?
-    if [[ $rc -ne 0 && $rc -ne $MINS_HANDLER_UNAVAILABLE ]]; then
+    nv_verify_feature "$dependency" >/dev/null 2>&1 || rc=$?
+    if [[ $rc -ne 0 && $rc -ne $ENVY_HANDLER_UNAVAILABLE ]]; then
       echo "Feature '$feature' requires drifted '$dependency'." >&2
       [[ "$selected" == true ]] || echo "Include '$dependency' in the upgrade selection." >&2
       return 1
     fi
-  done < <(mins_feature_dependencies "$feature")
+  done < <(nv_feature_dependencies "$feature")
 }
 
 _write_launcher() {
-  local bin_dir="$HOME/.local/bin" launcher="$HOME/.local/bin/mins-env" expected owned_path owned temp target
-  target="$MINS_ENV_ROOT/bin/mins-env"
+  local bin_dir="$HOME/.local/bin" launcher="$HOME/.local/bin/envy" expected owned_path owned temp target
+  target="$ENVY_ROOT/bin/envy"
   mkdir -p "$bin_dir"
   printf -v expected 'exec %q "$@"' "$target"
   if [[ -e "$launcher" || -L "$launcher" ]] && ! grep -Fxq "$expected" "$launcher" 2>/dev/null; then
-    owned_path="$(mins_state_get ownership.launcher.path '""' 2>/dev/null || true)"
-    owned="$(mins_state_get ownership.launcher.created false 2>/dev/null || echo false)"
-    if [[ "$owned" != true || "$owned_path" != "$launcher" ]] || ! grep -qF 'mins-env' "$launcher" 2>/dev/null; then
+    owned_path="$(nv_state_get ownership.launcher.path '""' 2>/dev/null || true)"
+    owned="$(nv_state_get ownership.launcher.created false 2>/dev/null || echo false)"
+    if [[ "$owned" != true || "$owned_path" != "$launcher" ]] || ! grep -qF 'envy' "$launcher" 2>/dev/null; then
       die "$launcher already exists and is not managed by this installation"
     fi
   fi
-  temp="$(mktemp "$bin_dir/.mins-env.XXXXXX")"
+  temp="$(mktemp "$bin_dir/.envy.XXXXXX")"
   {
     echo '#!/usr/bin/env bash'
     echo "$expected"
   } > "$temp"
   chmod 755 "$temp"
   mv "$temp" "$launcher"
-  mins_state_set ownership.launcher.path "$(_json_quote "$launcher")"
-  mins_state_set ownership.launcher.created true
+  nv_state_set ownership.launcher.path "$(_json_quote "$launcher")"
+  nv_state_set ownership.launcher.created true
 }
 
 _launcher_current() {
-  local launcher="$HOME/.local/bin/mins-env" expected target
+  local launcher="$HOME/.local/bin/envy" expected target
   [[ -f "$launcher" ]] || return 1
-  target="$MINS_ENV_ROOT/bin/mins-env"
+  target="$ENVY_ROOT/bin/envy"
   printf -v expected 'exec %q "$@"' "$target"
   grep -Fxq "$expected" "$launcher"
 }
 
 _remove_launcher() {
   local launcher
-  launcher="$(mins_state_get ownership.launcher.path '""' 2>/dev/null || true)"
+  launcher="$(nv_state_get ownership.launcher.path '""' 2>/dev/null || true)"
   [[ -n "$launcher" ]] || return 0
-  if [[ "$launcher" == "$HOME/.local/bin/mins-env" ]] && _launcher_current; then
+  if [[ "$launcher" == "$HOME/.local/bin/envy" ]] && _launcher_current; then
     rm -f "$launcher"
   fi
 }
 
 cmd_generate_env() {
   local state_dir env_file
-  state_dir="$(mins_state_dir)"
+  state_dir="$(nv_state_dir)"
   env_file="$state_dir/$ENV_FILE_NAME"
-  python3 "$MINS_ENV_ROOT/lib/render_env.py" \
-    "$(mins_manifest_file)" "$(mins_state_file)" "$env_file" "$MINS_ENV_ROOT"
+  python3 "$ENVY_ROOT/lib/render_env.py" \
+    "$(nv_manifest_file)" "$(nv_state_file)" "$env_file" "$ENVY_ROOT"
 }
 
 _select_install_features() {
   local preset="$1" interactive="$2" reconfigure="$3" feature tier description enabled
   local current_value selection_explicit has_current
   INSTALL_SELECTION=()
-  for feature in $(mins_list_features); do
-    mins_feature_in_scope "$feature" || continue
-    tier="$(mins_feature_tier "$feature")"
+  for feature in $(nv_list_features); do
+    nv_feature_in_scope "$feature" || continue
+    tier="$(nv_feature_tier "$feature")"
     enabled=false
     case "$tier" in
       core) enabled=true ;;
       *)
-        if [[ "$preset" == recommended ]] && mins_feature_default_enabled "$feature"; then
+        if [[ "$preset" == recommended ]] && nv_feature_default_enabled "$feature"; then
           enabled=true
         fi
         ;;
     esac
     has_current=false
-    if [[ "$reconfigure" == true && "$interactive" == true ]] && mins_state_exists; then
-      current_value="$(mins_state_feature_get "$feature" enabled 2>/dev/null || true)"
-      selection_explicit="$(mins_state_feature_get "$feature" selection_explicit true 2>/dev/null || echo true)"
+    if [[ "$reconfigure" == true && "$interactive" == true ]] && nv_state_exists; then
+      current_value="$(nv_state_feature_get "$feature" enabled 2>/dev/null || true)"
+      selection_explicit="$(nv_state_feature_get "$feature" selection_explicit true 2>/dev/null || echo true)"
       if [[ "$selection_explicit" == true ]] \
         && [[ "$current_value" == true || "$current_value" == false ]]; then
         enabled="$current_value"
@@ -292,7 +292,7 @@ _select_install_features() {
       fi
     fi
     if [[ "$interactive" == true && "$tier" != core ]]; then
-      description="$(mins_feature_get "$feature" description 2>/dev/null || echo "$feature")"
+      description="$(nv_feature_get "$feature" description 2>/dev/null || echo "$feature")"
       _prompt_feature_toggle "$feature" "$description" "$enabled" "$has_current"
       enabled="$FEATURE_PROMPT_VALUE"
     fi
@@ -351,20 +351,20 @@ _prompt_feature_toggle() {
 _show_install_plan() {
   local feature tier
   echo ""
-  echo "Selected features for $MINS_PLATFORM:"
+  echo "Selected features for $ENVY_PLATFORM:"
   [[ -n "${INSTALL_SELECTION[0]+set}" ]] || return 0
   for feature in "${INSTALL_SELECTION[@]}"; do
-    tier="$(mins_feature_tier "$feature")"
-    printf '  %-18s %-11s %s\n' "$feature" "$tier" "$(mins_feature_get "$feature" description)"
+    tier="$(nv_feature_tier "$feature")"
+    printf '  %-18s %-11s %s\n' "$feature" "$tier" "$(nv_feature_get "$feature" description)"
   done
 }
 
 _remove_deactivated_features() {
-  mins_state_exists || return 0
+  nv_state_exists || return 0
   local feature enabled rc index
   local deactivated=() reversed=()
-  for feature in $(mins_list_features); do
-    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+  for feature in $(nv_list_features); do
+    enabled="$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
     [[ "$enabled" == true ]] || continue
     if [[ -n "${INSTALL_SELECTION[0]+set}" ]] && _array_contains "$feature" "${INSTALL_SELECTION[@]}"; then
       continue
@@ -374,8 +374,8 @@ _remove_deactivated_features() {
   for ((index=${#deactivated[@]}-1; index>=0; index--)); do reversed+=("${deactivated[$index]}"); done
   for feature in ${reversed[0]+"${reversed[@]}"}; do
     rc=0
-    mins_run_feature_handler "$feature" remove || rc=$?
-    if [[ $rc -ne 0 && $rc -ne $MINS_HANDLER_UNAVAILABLE ]]; then
+    nv_run_feature_handler "$feature" remove || rc=$?
+    if [[ $rc -ne 0 && $rc -ne $ENVY_HANDLER_UNAVAILABLE ]]; then
       die "Failed to remove deselected feature '$feature'; prior selection was retained"
     fi
   done
@@ -383,15 +383,15 @@ _remove_deactivated_features() {
 
 _reconcile_selection_consumers() {
   local feature enabled reconcile rc failed=0
-  for feature in $(mins_list_features); do
-    reconcile="$(mins_feature_get "$feature" reconcile_after_selection_change 2>/dev/null || echo false)"
+  for feature in $(nv_list_features); do
+    reconcile="$(nv_feature_get "$feature" reconcile_after_selection_change 2>/dev/null || echo false)"
     [[ "$reconcile" == true ]] || continue
-    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+    enabled="$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
     [[ "$enabled" == true ]] || continue
     rc=0
-    mins_run_feature_handler "$feature" converge || rc=$?
+    nv_run_feature_handler "$feature" converge || rc=$?
     if [[ $rc -ne 0 ]]; then
-      mins_state_feature_result "$feature" failed "selection reconciliation failed"
+      nv_state_feature_result "$feature" failed "selection reconciliation failed"
       ((failed++)) || true
     fi
   done
@@ -414,14 +414,14 @@ cmd_install() {
     esac
   done
   [[ -z "$preset" || "$preset" == core || "$preset" == recommended ]] || die "Unknown preset: $preset"
-  mins_manifest_validate
-  mins_detect_platform
-  export MINS_ENV_DRY_RUN="$dry_run"
-  [[ "$MINS_PLATFORM" != unsupported ]] || die "Unsupported platform. Windows requires Git Bash."
+  nv_manifest_validate
+  nv_detect_platform
+  export ENVY_DRY_RUN="$dry_run"
+  [[ "$ENVY_PLATFORM" != unsupported ]] || die "Unsupported platform. Windows requires Git Bash."
   _prepare_state
 
-  if mins_state_exists && [[ "$(mins_state_get installed false)" == true && "$reconfigure" == false ]]; then
-    echo "mins-env is already installed for $MINS_ENV_ROOT."
+  if nv_state_exists && [[ "$(nv_state_get installed false)" == true && "$reconfigure" == false ]]; then
+    echo "envy is already installed for $ENVY_ROOT."
     if [[ "$dry_run" == true ]]; then cmd_upgrade --dry-run; return; fi
     _write_launcher
     if [[ "$assume_yes" == true ]]; then cmd_upgrade; return; fi
@@ -432,18 +432,18 @@ cmd_install() {
       case "$reply" in n|N|no|NO) return 0 ;; esac
       cmd_upgrade
     else
-      echo "Run 'mins-env upgrade' to converge enabled features."
+      echo "Run 'envy upgrade' to converge enabled features."
     fi
     return 0
   fi
 
-  echo "mins-env install"
-  echo "  Checkout:  $MINS_ENV_ROOT"
+  echo "envy install"
+  echo "  Checkout:  $ENVY_ROOT"
   echo "  Workspace: $WORKSPACE_ROOT"
-  echo "  Platform: $MINS_PLATFORM"
-  echo "  Shell:    $MINS_SHELL"
-  if [[ -n "${_MINS_BUNDLES[0]+set}" ]]; then
-    echo "  Bundles:  ${_MINS_BUNDLES[*]}"
+  echo "  Platform: $ENVY_PLATFORM"
+  echo "  Shell:    $ENVY_SHELL"
+  if [[ -n "${_ENVY_BUNDLES[0]+set}" ]]; then
+    echo "  Bundles:  ${_ENVY_BUNDLES[*]}"
   fi
   echo ""
   echo "Core features provide managed dotfiles, the mise toolchain, and command paths."
@@ -470,26 +470,26 @@ cmd_install() {
 
   _remove_deactivated_features
 
-  if ! mins_state_exists; then
-    mins_state_init "$(mins_manifest_file)" "$MINS_PLATFORM" "$MINS_SHELL" "$MINS_ENV_ROOT" "$preset"
+  if ! nv_state_exists; then
+    nv_state_init "$(nv_manifest_file)" "$ENVY_PLATFORM" "$ENVY_SHELL" "$ENVY_ROOT" "$preset"
   else
-    mins_state_set installed true
-    mins_state_set preset "$(_json_quote "$preset")"
-    mins_state_set mins_env_root "$(_json_quote "$MINS_ENV_ROOT")"
-    mins_state_set workspace_root "$(_json_quote "$WORKSPACE_ROOT")"
-    mins_state_set bundles "$(mins_manifest_get bundles)"
-    mins_state_set manifest_fingerprint "$(_json_quote "$(mins_manifest_fingerprint)")"
+    nv_state_set installed true
+    nv_state_set preset "$(_json_quote "$preset")"
+    nv_state_set envy_root "$(_json_quote "$ENVY_ROOT")"
+    nv_state_set workspace_root "$(_json_quote "$WORKSPACE_ROOT")"
+    nv_state_set bundles "$(nv_manifest_get bundles)"
+    nv_state_set manifest_fingerprint "$(_json_quote "$(nv_manifest_fingerprint)")"
   fi
-  mins_state_set platform_hierarchy \
-    "$(_json_quote "$(mins_platform_hierarchy "$MINS_PLATFORM")")"
+  nv_state_set platform_hierarchy \
+    "$(_json_quote "$(nv_platform_hierarchy "$ENVY_PLATFORM")")"
 
   local feature enabled tier
-  for feature in $(mins_list_features); do
-    tier="$(mins_feature_tier "$feature")"
+  for feature in $(nv_list_features); do
+    tier="$(nv_feature_tier "$feature")"
     enabled=false
-    if mins_feature_in_scope "$feature" && [[ -n "${INSTALL_SELECTION[0]+set}" ]] \
+    if nv_feature_in_scope "$feature" && [[ -n "${INSTALL_SELECTION[0]+set}" ]] \
       && _array_contains "$feature" "${INSTALL_SELECTION[@]}"; then enabled=true; fi
-    mins_state_feature_init "$feature" "$enabled" "$tier" "$(mins_feature_origin "$feature")"
+    nv_state_feature_init "$feature" "$enabled" "$tier" "$(nv_feature_origin "$feature")"
   done
   _write_launcher
   cmd_upgrade --from-install
@@ -508,7 +508,7 @@ cmd_upgrade() {
       *) die "Unknown upgrade option: $1" ;;
     esac
   done
-  export MINS_ENV_DRY_RUN="$dry_run"
+  export ENVY_DRY_RUN="$dry_run"
   [[ "$from_install" == true ]] || _ensure_installed || return $?
   _validate_selectors
   _validate_only_enabled
@@ -518,28 +518,28 @@ cmd_upgrade() {
   done < <(_collect_targets)
   (( target_count > 0 )) || { echo "No enabled features selected."; return 0; }
 
-  echo "mins-env upgrade"
+  echo "envy upgrade"
   [[ "$dry_run" == true ]] && echo "  Mode: dry run"
   if [[ "$dry_run" == false ]]; then
-    log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/mins-env/logs"
+    log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/envy/logs"
     mkdir -p "$log_dir"
     log_file="$(mktemp "$log_dir/$(date -u '+%Y%m%dT%H%M%SZ').log.XXXXXX")"
   fi
 
   for feature in "${targets[@]}"; do
     if ! _feature_dependencies_ready "$feature"; then
-      [[ "$dry_run" == true ]] || mins_state_feature_result "$feature" failed "dependency is unavailable or drifted"
+      [[ "$dry_run" == true ]] || nv_state_feature_result "$feature" failed "dependency is unavailable or drifted"
       ((failed++)) || true
       continue
     fi
     rc=0
-    mins_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
+    nv_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
     if [[ "$force" == false && $rc -eq 0 ]]; then
       echo "  OK $feature - current"
       if [[ "$dry_run" == false ]]; then
-        mins_state_feature_set "$feature" status '"current"'
-        mins_state_feature_set "$feature" detail '""'
-        mins_state_feature_verify "$feature" current ""
+        nv_state_feature_set "$feature" status '"current"'
+        nv_state_feature_set "$feature" detail '""'
+        nv_state_feature_verify "$feature" current ""
       fi
       ((skipped++)) || true
       continue
@@ -550,18 +550,18 @@ cmd_upgrade() {
     fi
 
     echo ""
-    echo "-- $feature: $(mins_feature_get "$feature" description)"
+    echo "-- $feature: $(nv_feature_get "$feature" description)"
     set +e
-    MINS_ENV_DRY_RUN=0 mins_run_feature_handler "$feature" converge 2>&1 | tee -a "$log_file"
+    ENVY_DRY_RUN=0 nv_run_feature_handler "$feature" converge 2>&1 | tee -a "$log_file"
     rc=${PIPESTATUS[0]}
     set -e
-    [[ $rc -eq $MINS_HANDLER_UNAVAILABLE ]] && rc=0
+    [[ $rc -eq $ENVY_HANDLER_UNAVAILABLE ]] && rc=0
     if [[ $rc -eq 0 ]]; then
-      mins_state_feature_result "$feature" current ""
+      nv_state_feature_result "$feature" current ""
       echo "  OK $feature upgraded"
       ((applied++)) || true
     else
-      mins_state_feature_result "$feature" failed "handler exited $rc; see $log_file"
+      nv_state_feature_result "$feature" failed "handler exited $rc; see $log_file"
       echo "  FAILED $feature (exit $rc; log: $log_file)" >&2
       ((failed++)) || true
     fi
@@ -570,23 +570,23 @@ cmd_upgrade() {
   if [[ "$dry_run" == false ]]; then
     cmd_generate_env
     for feature in "${targets[@]}"; do
-      [[ "$(mins_state_feature_get "$feature" status disabled 2>/dev/null || echo disabled)" == current ]] || continue
+      [[ "$(nv_state_feature_get "$feature" status disabled 2>/dev/null || echo disabled)" == current ]] || continue
       rc=0
-      mins_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
+      nv_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
       if [[ $rc -eq 0 ]]; then
-        mins_state_feature_verify "$feature" current ""
-      elif [[ $rc -eq $MINS_HANDLER_UNAVAILABLE ]]; then
-        mins_state_feature_verify "$feature" unknown "no verify handler"
+        nv_state_feature_verify "$feature" current ""
+      elif [[ $rc -eq $ENVY_HANDLER_UNAVAILABLE ]]; then
+        nv_state_feature_verify "$feature" unknown "no verify handler"
       else
-        mins_state_feature_verify "$feature" drifted "verification failed after convergence"
-        mins_state_feature_result "$feature" failed "verification failed after convergence"
+        nv_state_feature_verify "$feature" drifted "verification failed after convergence"
+        nv_state_feature_result "$feature" failed "verification failed after convergence"
         echo "  FAILED $feature verification after convergence" >&2
         ((failed++)) || true
         if (( applied > 0 )); then ((applied--)) || true; fi
       fi
     done
-    mins_state_set core_revision "$(_json_quote "$(_current_commit)")"
-    mins_state_set last_upgrade_at "$(_json_quote "$(date -u '+%Y-%m-%dT%H:%M:%SZ')")"
+    nv_state_set core_revision "$(_json_quote "$(_current_commit)")"
+    nv_state_set last_upgrade_at "$(_json_quote "$(date -u '+%Y-%m-%dT%H:%M:%SZ')")"
   fi
   echo ""
   echo "Summary: $applied upgraded, $skipped current, $failed failed"
@@ -599,10 +599,10 @@ cmd_status() {
     case "$1" in --json) json=true; shift ;; *) die "Unknown status option: $1" ;; esac
   done
   _ensure_installed || return $?
-  if [[ "$json" == true ]]; then mins_state_export; return; fi
-  python3 "$MINS_ENV_ROOT/lib/status.py" \
-    "$(mins_manifest_file)" "$(mins_state_file)" "$MINS_PLATFORM" "$MINS_ENV_ROOT" \
-    "$(mins_platform_hierarchy "$MINS_PLATFORM")"
+  if [[ "$json" == true ]]; then nv_state_export; return; fi
+  python3 "$ENVY_ROOT/lib/status.py" \
+    "$(nv_manifest_file)" "$(nv_state_file)" "$ENVY_PLATFORM" "$ENVY_ROOT" \
+    "$(nv_platform_hierarchy "$ENVY_PLATFORM")"
 }
 
 cmd_verify() {
@@ -626,11 +626,11 @@ cmd_verify() {
   if (( target_count > 0 )); then
     for feature in "${targets[@]}"; do
       rc=0
-      mins_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
+      nv_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
       case "$rc" in
-        0) mins_state_feature_verify "$feature" current ""; results+=("$feature=current") ;;
-        "$MINS_HANDLER_UNAVAILABLE") mins_state_feature_verify "$feature" unknown "no verify handler"; results+=("$feature=unknown"); ((unknown++)) || true ;;
-        *) mins_state_feature_verify "$feature" drifted "verify handler failed"; results+=("$feature=drifted"); ((failed++)) || true ;;
+        0) nv_state_feature_verify "$feature" current ""; results+=("$feature=current") ;;
+        "$ENVY_HANDLER_UNAVAILABLE") nv_state_feature_verify "$feature" unknown "no verify handler"; results+=("$feature=unknown"); ((unknown++)) || true ;;
+        *) nv_state_feature_verify "$feature" drifted "verify handler failed"; results+=("$feature=drifted"); ((failed++)) || true ;;
       esac
     done
   fi
@@ -653,31 +653,31 @@ _doctor_area() {
   local area="$1" feature_rc=0 alias
   case "$area" in
     state)
-      mins_state_validate
-      [[ "$(mins_state_get mins_env_root)" == "$MINS_ENV_ROOT" ]]
-      [[ "$(mins_state_get manifest_fingerprint)" == "$(mins_manifest_fingerprint)" ]]
-      [[ "$(mins_state_get platform_hierarchy)" == "$(mins_platform_hierarchy "$MINS_PLATFORM")" ]]
+      nv_state_validate
+      [[ "$(nv_state_get envy_root)" == "$ENVY_ROOT" ]]
+      [[ "$(nv_state_get manifest_fingerprint)" == "$(nv_manifest_fingerprint)" ]]
+      [[ "$(nv_state_get platform_hierarchy)" == "$(nv_platform_hierarchy "$ENVY_PLATFORM")" ]]
       ;;
     features) cmd_verify >/dev/null ;;
     shell) command -v zsh >/dev/null 2>&1 && command -v tmux >/dev/null 2>&1 ;;
-    chezmoi) mins_run_feature_handler chezmoi doctor ;;
-    mise) mins_run_feature_handler mise doctor ;;
+    chezmoi) nv_run_feature_handler chezmoi doctor ;;
+    mise) nv_run_feature_handler mise doctor ;;
     network)
-      local probe_url="${MINS_ENV_NETWORK_PROBE_URL:-https://github.com}"
-      if [[ -n "${MINS_ENV_NETWORK_PROXY:-}" ]]; then
-        curl -fsS --max-time 10 --proxy "$MINS_ENV_NETWORK_PROXY" "$probe_url" >/dev/null
+      local probe_url="${ENVY_NETWORK_PROBE_URL:-https://github.com}"
+      if [[ -n "${ENVY_NETWORK_PROXY:-}" ]]; then
+        curl -fsS --max-time 10 --proxy "$ENVY_NETWORK_PROXY" "$probe_url" >/dev/null
       else
         curl -fsS --max-time 10 "$probe_url" >/dev/null
       fi
       ;;
     *)
-      alias="$(mins_manifest_get "doctor_aliases.$area" 2>/dev/null || true)"
+      alias="$(nv_manifest_get "doctor_aliases.$area" 2>/dev/null || true)"
       [[ -z "$alias" ]] || area="$alias"
-      mins_feature_exists "$area" || return 2
-      mins_feature_in_scope "$area" || return 2
-      [[ "$(mins_state_feature_get "$area" enabled false 2>/dev/null || echo false)" == true ]] || return 2
-      mins_run_feature_handler "$area" doctor || feature_rc=$?
-      if [[ $feature_rc -eq $MINS_HANDLER_UNAVAILABLE ]]; then mins_verify_feature "$area"; else return "$feature_rc"; fi
+      nv_feature_exists "$area" || return 2
+      nv_feature_in_scope "$area" || return 2
+      [[ "$(nv_state_feature_get "$area" enabled false 2>/dev/null || echo false)" == true ]] || return 2
+      nv_run_feature_handler "$area" doctor || feature_rc=$?
+      if [[ $feature_rc -eq $ENVY_HANDLER_UNAVAILABLE ]]; then nv_verify_feature "$area"; else return "$feature_rc"; fi
       ;;
   esac
 }
@@ -692,10 +692,10 @@ cmd_doctor() {
   _ensure_installed || return $?
   if _array_contains all "${areas[@]}"; then
     areas=(state features shell network)
-    for feature in $(mins_list_features); do
-      mins_feature_in_scope "$feature" || continue
-      [[ "$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)" == true ]] || continue
-      specification="$(mins_feature_resolve_handler "$feature" doctor 2>/dev/null || true)"
+    for feature in $(nv_list_features); do
+      nv_feature_in_scope "$feature" || continue
+      [[ "$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)" == true ]] || continue
+      specification="$(nv_feature_resolve_handler "$feature" doctor 2>/dev/null || true)"
       [[ -n "$specification" ]] || continue
       _array_contains "$feature" "${areas[@]}" || areas+=("$feature")
     done
@@ -713,7 +713,7 @@ cmd_doctor() {
   if [[ "$json" == true ]]; then
     python3 -c 'import json,sys; print(json.dumps(dict(item.split("=",1) for item in sys.argv[1:]),indent=2,sort_keys=True))' "${results[@]}"
   else
-    echo "mins-env doctor"
+    echo "envy doctor"
     for area in "${results[@]}"; do printf '  %-12s %s\n' "${area%%=*}" "${area#*=}"; done
     [[ $failed -eq 0 ]] || echo "Run individual areas with --verbose for details."
   fi
@@ -722,8 +722,8 @@ cmd_doctor() {
 
 _validate_uninstall_dependencies() {
   local targets=("$@") feature dependency enabled
-  for feature in $(mins_list_features); do
-    enabled="$(mins_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
+  for feature in $(nv_list_features); do
+    enabled="$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
     [[ "$enabled" == true ]] || continue
     _array_contains "$feature" "${targets[@]}" && continue
     while IFS= read -r dependency; do
@@ -731,14 +731,14 @@ _validate_uninstall_dependencies() {
       if _array_contains "$dependency" "${targets[@]}"; then
         die "Cannot uninstall '$dependency' while enabled '$feature' depends on it"
       fi
-    done < <(mins_feature_dependencies "$feature")
+    done < <(nv_feature_dependencies "$feature")
   done
 }
 
 _validate_uninstall_core() {
   local feature
   for feature in "$@"; do
-    if [[ "$(mins_feature_tier "$feature")" == core ]]; then
+    if [[ "$(nv_feature_tier "$feature")" == core ]]; then
       die "Core feature '$feature' can only be removed by a full uninstall"
     fi
   done
@@ -757,10 +757,10 @@ cmd_uninstall() {
       *) die "Unknown uninstall option: $1" ;;
     esac
   done
-  export MINS_ENV_DRY_RUN="$dry_run"
-  if ! mins_state_exists; then echo "mins-env is not installed; nothing to remove."; return 0; fi
+  export ENVY_DRY_RUN="$dry_run"
+  if ! nv_state_exists; then echo "envy is not installed; nothing to remove."; return 0; fi
   _prepare_state
-  if [[ "$(mins_state_get installed false)" != true ]]; then echo "mins-env is not installed; nothing to remove."; return 0; fi
+  if [[ "$(nv_state_get installed false)" != true ]]; then echo "envy is not installed; nothing to remove."; return 0; fi
   local targets=() reversed=()
   _validate_selectors
   _validate_only_enabled
@@ -773,7 +773,7 @@ cmd_uninstall() {
   local index
   for ((index=target_count-1; index>=0; index--)); do reversed+=("${targets[$index]}"); done
   echo "Will uninstall: ${reversed[*]}"
-  [[ "$purge" == true ]] && echo "Purge will also remove mins-env-owned state, backups, and provider caches."
+  [[ "$purge" == true ]] && echo "Purge will also remove envy-owned state, backups, and provider caches."
   if [[ "$dry_run" == true ]]; then echo "Dry run: no changes made."; return 0; fi
   if [[ "$assume_yes" == false ]]; then
     [[ -t 0 && -t 1 ]] || die "Non-interactive uninstall requires --yes"
@@ -783,11 +783,11 @@ cmd_uninstall() {
   fi
   for feature in "${reversed[@]}"; do
     rc=0
-    MINS_ENV_PURGE="$purge" mins_run_feature_handler "$feature" remove || rc=$?
-    if [[ $rc -eq 0 || $rc -eq $MINS_HANDLER_UNAVAILABLE ]]; then
-      [[ $rc -eq $MINS_HANDLER_UNAVAILABLE ]] && echo "  Retaining external resources for $feature (no remove handler)."
-      mins_state_feature_set "$feature" enabled false
-      mins_state_feature_set "$feature" status '"disabled"'
+    ENVY_PURGE="$purge" nv_run_feature_handler "$feature" remove || rc=$?
+    if [[ $rc -eq 0 || $rc -eq $ENVY_HANDLER_UNAVAILABLE ]]; then
+      [[ $rc -eq $ENVY_HANDLER_UNAVAILABLE ]] && echo "  Retaining external resources for $feature (no remove handler)."
+      nv_state_feature_set "$feature" enabled false
+      nv_state_feature_set "$feature" status '"disabled"'
     else
       echo "  Failed to uninstall $feature" >&2
       ((failed++)) || true
@@ -800,9 +800,9 @@ cmd_uninstall() {
   cmd_generate_env
   if [[ "$all_features" == true && $failed -eq 0 ]]; then
     _remove_launcher
-    rm -f "$(mins_state_dir)/$ENV_FILE_NAME"
-    mins_state_set installed false
-    if [[ "$purge" == true ]]; then rm -rf "$(mins_state_dir)" "${XDG_STATE_HOME:-$HOME/.local/state}/mins-env"; fi
+    rm -f "$(nv_state_dir)/$ENV_FILE_NAME"
+    nv_state_set installed false
+    if [[ "$purge" == true ]]; then rm -rf "$(nv_state_dir)" "${XDG_STATE_HOME:-$HOME/.local/state}/envy"; fi
   fi
   (( failed == 0 ))
 }
@@ -810,30 +810,30 @@ cmd_uninstall() {
 cmd_secrets() {
   local action="${1:-help}"
   if [[ "$action" == help || "$action" == --help || "$action" == -h ]]; then
-    python3 "$MINS_ENV_ROOT/features/secrets.py" help
+    python3 "$ENVY_ROOT/features/secrets.py" help
     return
   fi
   if [[ "$action" =~ ^(push-key|pull-key)$ && "${2:-}" =~ ^(--help|-h)$ ]]; then
-    python3 "$MINS_ENV_ROOT/features/secrets.py" "$action" "${2}"
+    python3 "$ENVY_ROOT/features/secrets.py" "$action" "${2}"
     return
   fi
   _ensure_installed || return $?
-  mins_feature_exists secrets || die "This installation does not provide the secrets feature"
-  mins_feature_in_scope secrets || die "The secrets feature is unavailable on this platform"
-  [[ "$(mins_state_feature_get secrets enabled false 2>/dev/null || echo false)" == true ]] \
-    || die "The secrets feature is not installed; run 'mins-env install --reconfigure' and enable it first"
+  nv_feature_exists secrets || die "This installation does not provide the secrets feature"
+  nv_feature_in_scope secrets || die "The secrets feature is unavailable on this platform"
+  [[ "$(nv_state_feature_get secrets enabled false 2>/dev/null || echo false)" == true ]] \
+    || die "The secrets feature is not installed; run 'envy install --reconfigure' and enable it first"
   if [[ "$action" =~ ^(push-key|pull-key)$ ]]; then
     _feature_dependencies_ready secrets \
-      || die "The secrets feature is not initialized; run 'mins-env upgrade --only chezmoi,mise --force' and retry"
+      || die "The secrets feature is not initialized; run 'envy upgrade --only chezmoi,mise --force' and retry"
   fi
-  python3 "$MINS_ENV_ROOT/features/secrets.py" "$@"
+  python3 "$ENVY_ROOT/features/secrets.py" "$@"
 }
 
 cmd_help() {
   cat <<'USAGE'
-mins-env - portable developer environment manager
+envy - portable developer environment manager
 
-Usage: mins-env <command> [options]
+Usage: envy <command> [options]
 
 Global:
   --bundle PATH       Add one explicit feature/resource bundle (repeatable)
@@ -855,10 +855,10 @@ USAGE
 
 main() {
   local command="${1:-help}"
-  export MINS_ENV_DRY_RUN=false
+  export ENVY_DRY_RUN=false
   shift 2>/dev/null || true
   if [[ "$command" != help && "$command" != --help && "$command" != -h ]]; then
-    command -v python3 >/dev/null 2>&1 || die "python3 is required to run mins-env"
+    command -v python3 >/dev/null 2>&1 || die "python3 is required to run envy"
   fi
   case "$command" in
     install) cmd_install "$@" ;;
@@ -870,7 +870,7 @@ main() {
     uninstall) cmd_uninstall "$@" ;;
     generate-env) _ensure_installed && cmd_generate_env ;;
     help|--help|-h) cmd_help ;;
-    *) die "Unknown command: $command. Run 'mins-env help'." ;;
+    *) die "Unknown command: $command. Run 'envy help'." ;;
   esac
 }
 

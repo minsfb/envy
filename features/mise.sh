@@ -3,12 +3,12 @@
 set -euo pipefail
 
 ACTION="${1:-converge}"
-MINS_ENV_ROOT="${MINS_ENV_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/mins-env"
+ENVY_ROOT="${ENVY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/envy"
 MISE_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml"
-# The path is resolved from MINS_ENV_ROOT.
+# The path is resolved from ENVY_ROOT.
 # shellcheck disable=SC1091
-source "$MINS_ENV_ROOT/lib/pkg.sh"
+source "$ENVY_ROOT/lib/pkg.sh"
 export PATH="$HOME/.local/bin:$PATH"
 pkg_use_external_proxy
 # The core dotnet backend honors an inherited system install root. A managed
@@ -37,8 +37,8 @@ _verify() {
 }
 
 _remove() {
-  # Tool downloads and shared caches may predate mins-env and are retained.
-  if [[ "${MINS_ENV_PURGE:-false}" == true ]] \
+  # Tool downloads and shared caches may predate envy and are retained.
+  if [[ "${ENVY_PURGE:-false}" == true ]] \
     && [[ -f "$STATE_ROOT/providers/mise.installed" ]] \
     && [[ "$(command -v mise 2>/dev/null || true)" == "$HOME/.local/bin/mise" ]]; then
     rm -f "$HOME/.local/bin/mise"

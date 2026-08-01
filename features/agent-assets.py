@@ -79,13 +79,13 @@ def load_json(path: Path, label: str) -> dict[str, Any]:
 
 
 def configured_manifests(args: argparse.Namespace) -> list[Path]:
-    explicit = args.manifest or os.environ.get("MINS_AGENT_ASSETS_MANIFEST")
+    explicit = args.manifest or os.environ.get("ENVY_AGENT_ASSETS_MANIFEST")
     if explicit:
         return [Path(explicit).expanduser().resolve()]
-    manifest_path = os.environ.get("MINS_ENV_MANIFEST")
+    manifest_path = os.environ.get("ENVY_MANIFEST")
     if not manifest_path:
         raise AssetError("no agent asset manifest is configured")
-    resolved = load_json(Path(manifest_path), "resolved mins-env manifest")
+    resolved = load_json(Path(manifest_path), "resolved envy manifest")
     resources = resolved.get("resources", {}).get("agent_asset_manifests", [])
     if not isinstance(resources, list) or not resources:
         raise AssetError("no agent_asset_manifests resources are configured")
@@ -243,7 +243,7 @@ class AgentAssets:
         self.args = args
         script = Path(__file__).resolve()
         self.env_dir = Path(
-            os.environ.get("MINS_ENV_DIR", script.parent.parent)
+            os.environ.get("ENVY_DIR", script.parent.parent)
         ).resolve()
         self.manifest_paths = configured_manifests(args)
         self.manifest_path = self.manifest_paths[0]
@@ -254,14 +254,14 @@ class AgentAssets:
         self.state_path = Path(
             args.state
             or os.environ.get(
-                "MINS_ENV_STATE_FILE", config_home / "mins-env" / "state.json"
+                "ENVY_STATE_FILE", config_home / "envy" / "state.json"
             )
         ).expanduser()
         self.ownership_path = Path(
             args.ownership
             or os.environ.get(
-                "MINS_AGENT_ASSETS_OWNERSHIP",
-                state_home / "mins-env" / "agent-assets.json",
+                "ENVY_AGENT_ASSETS_OWNERSHIP",
+                state_home / "envy" / "agent-assets.json",
             )
         ).expanduser()
         self.launcher = Path.home() / ".local" / "bin" / "agent-assets"
@@ -269,7 +269,7 @@ class AgentAssets:
         self.issues: list[dict[str, Any]] = []
         self.state: dict[str, Any] | None = None
         if self.state_path.is_file():
-            self.state = load_json(self.state_path, "mins-env state")
+            self.state = load_json(self.state_path, "envy state")
         self.ownership = self._load_ownership()
         self.groups: list[dict[str, Any]] = []
         self.all_assets: list[Asset] = []
@@ -277,7 +277,7 @@ class AgentAssets:
         self.source_roots: set[Path] = {path.parent for path in self.manifest_paths}
         self.destinations = self._destinations()
         self.platform = str(
-            os.environ.get("MINS_PLATFORM")
+            os.environ.get("ENVY_PLATFORM")
             or (self.state or {}).get("platform")
             or self._detect_platform()
         )
@@ -334,7 +334,7 @@ class AgentAssets:
         return isinstance(name, str) and self.feature_enabled(name)
 
     def platform_matches(self, targets: Iterable[str]) -> bool:
-        override = os.environ.get("MINS_PLATFORM_HIERARCHY_OVERRIDE", "").split()
+        override = os.environ.get("ENVY_PLATFORM_HIERARCHY_OVERRIDE", "").split()
         hierarchy = tuple(override) or PLATFORM_HIERARCHY.get(
             self.platform, (self.platform, "global")
         )
@@ -670,7 +670,7 @@ class AgentAssets:
     def launcher_content(self) -> str:
         return (
             "#!/usr/bin/env bash\n"
-            "# managed by mins-env agent-assets\n"
+            "# managed by envy agent-assets\n"
             f'exec {shlex.quote(str(Path(__file__).resolve()))} "$@"\n'
         )
 
@@ -738,13 +738,13 @@ class AgentAssets:
     def converge(self) -> int:
         if self.state is None:
             print(
-                f"agent-assets: mins-env state not found: {self.state_path}",
+                f"agent-assets: envy state not found: {self.state_path}",
                 file=sys.stderr,
             )
             return 2
         if not self.distribution_enabled():
             print(
-                "agent-assets: distribution feature is disabled; run mins-env install --reconfigure"
+                "agent-assets: distribution feature is disabled; run envy install --reconfigure"
             )
             return 2
         links, errors = self.preflight()
@@ -1288,7 +1288,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
-    if os.environ.get("MINS_ENV_DRY_RUN", "false").lower() in {"1", "true", "yes"}:
+    if os.environ.get("ENVY_DRY_RUN", "false").lower() in {"1", "true", "yes"}:
         args.dry_run = True
     return args
 

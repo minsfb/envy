@@ -3,7 +3,7 @@
 set -u
 
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-MARKER="$CONFIG_HOME/mins-env/agent-notifications.enabled"
+MARKER="$CONFIG_HOME/envy/agent-notifications.enabled"
 testing=false
 
 if [[ "${1:-}" == --test ]]; then

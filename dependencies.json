@@ -33,7 +33,7 @@
       "commit": "e52ee8ca55bcc56a17c828767a3f98f22a68d4eb",
       "license": "MIT",
       "url": "https://github.com/zsh-users/zsh-autosuggestions.git",
-      "installed_path": "~/.local/share/mins-zsh/zsh-autosuggestions"
+      "installed_path": "~/.local/share/envy/zsh/zsh-autosuggestions"
     },
     {
       "name": "zsh-syntax-highlighting",
@@ -41,7 +41,7 @@
       "commit": "db085e4661f6aafd24e5acb5b2e17e4dd5dddf3e",
       "license": "BSD-3-Clause",
       "url": "https://github.com/zsh-users/zsh-syntax-highlighting.git",
-      "installed_path": "~/.local/share/mins-zsh/zsh-syntax-highlighting"
+      "installed_path": "~/.local/share/envy/zsh/zsh-syntax-highlighting"
     },
     {
       "name": "zsh-history-substring-search",
@@ -49,7 +49,7 @@
       "commit": "400e58a87f72ecec14f783fbd29bc6be4ff1641c",
       "license": "BSD-3-Clause",
       "url": "https://github.com/zsh-users/zsh-history-substring-search.git",
-      "installed_path": "~/.local/share/mins-zsh/zsh-history-substring-search"
+      "installed_path": "~/.local/share/envy/zsh/zsh-history-substring-search"
     },
     {
       "name": "tmux-resurrect",
@@ -57,7 +57,7 @@
       "commit": "e87d7d592cac97fa38c12395ebec042c154a1844",
       "license": "MIT",
       "url": "https://github.com/tmux-plugins/tmux-resurrect.git",
-      "installed_path": "~/.local/share/mins-tmux/tmux-resurrect"
+      "installed_path": "~/.local/share/envy/tmux/tmux-resurrect"
     },
     {
       "name": "tmux-continuum",
@@ -65,7 +65,7 @@
       "commit": "46e0e0023476018ddb4cc0d44783eede27e5a8ec",
       "license": "MIT",
       "url": "https://github.com/tmux-plugins/tmux-continuum.git",
-      "installed_path": "~/.local/share/mins-tmux/tmux-continuum"
+      "installed_path": "~/.local/share/envy/tmux/tmux-continuum"
     }
   ]
 }

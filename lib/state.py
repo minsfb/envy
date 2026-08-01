@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomic, migratable machine state for mins-env."""
+"""Atomic, migratable machine state for envy."""
 
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ def feature_record(
         "enabled": enabled,
         "selection_explicit": explicit,
         "tier": definition.get("tier", "optional"),
-        "origin": definition.get("_origin", "mins-env-core"),
+        "origin": definition.get("_origin", "envy-core"),
         "status": "pending" if enabled else "disabled",
         "verification": "unknown",
         "detail": "",
@@ -121,7 +121,7 @@ def new_state(
         "machine_id": socket.gethostname(),
         "platform": platform,
         "shell": shell,
-        "mins_env_root": root,
+        "envy_root": root,
         "workspace_root": manifest.get("workspace_root", root),
         "preset": preset,
         "manifest_fingerprint": manifest_fingerprint(manifest_path),
@@ -156,7 +156,7 @@ def normalize_existing_feature(
         "enabled": installed and definition.get("tier") == "core",
         "selection_explicit": True,
         "tier": definition.get("tier", "optional"),
-        "origin": definition.get("_origin", "mins-env-core"),
+        "origin": definition.get("_origin", "envy-core"),
         "status": "pending",
         "verification": "unknown",
         "detail": "",
@@ -199,7 +199,7 @@ def migrate_v3(
         "machine_id": socket.gethostname(),
         "platform": platform,
         "shell": shell,
-        "mins_env_root": root,
+        "envy_root": root,
         "workspace_root": manifest.get("workspace_root", root),
         "manifest_fingerprint": manifest_fingerprint(manifest_path),
         "bundles": bundle_state(manifest),

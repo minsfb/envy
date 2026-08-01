@@ -24,7 +24,7 @@ def adb_path(root: Path) -> Path | None:
 
 
 def state_root() -> Path | None:
-    state_file = os.environ.get("MINS_ENV_STATE_FILE")
+    state_file = os.environ.get("ENVY_STATE_FILE")
     if not state_file or not Path(state_file).is_file():
         return None
     try:
@@ -38,7 +38,7 @@ def state_root() -> Path | None:
 def candidates() -> list[Path]:
     home = Path.home()
     raw_values = [
-        os.environ.get("MINS_ADB_SDK_ROOT"),
+        os.environ.get("ENVY_ADB_SDK_ROOT"),
         os.environ.get("ANDROID_SDK_ROOT"),
         os.environ.get("ANDROID_HOME"),
     ]
@@ -66,13 +66,13 @@ def choose(values: list[Path]) -> Path:
     if not values:
         raise AdbError(
             "no Android SDK with platform-tools/adb was found; install one or set "
-            "MINS_ADB_SDK_ROOT"
+            "ENVY_ADB_SDK_ROOT"
         )
-    explicit = os.environ.get("MINS_ADB_SDK_ROOT")
+    explicit = os.environ.get("ENVY_ADB_SDK_ROOT")
     if explicit:
         requested = Path(explicit).expanduser().resolve()
         if requested not in values:
-            raise AdbError(f"MINS_ADB_SDK_ROOT is not a usable SDK: {requested}")
+            raise AdbError(f"ENVY_ADB_SDK_ROOT is not a usable SDK: {requested}")
         return requested
     if len(values) == 1 or not (sys.stdin.isatty() and sys.stdout.isatty()):
         return values[0]
@@ -95,10 +95,10 @@ def choose(values: list[Path]) -> Path:
 
 
 def record(root: Path) -> None:
-    state_file = os.environ.get("MINS_ENV_STATE_FILE")
-    env_root = os.environ.get("MINS_ENV_ROOT")
+    state_file = os.environ.get("ENVY_STATE_FILE")
+    env_root = os.environ.get("ENVY_ROOT")
     if not state_file or not env_root:
-        raise AdbError("mins-env state is unavailable")
+        raise AdbError("envy state is unavailable")
     subprocess.run(
         [
             sys.executable,
@@ -114,7 +114,7 @@ def record(root: Path) -> None:
 
 def converge() -> int:
     root = choose(candidates())
-    if os.environ.get("MINS_ENV_DRY_RUN", "false").lower() in {"1", "true", "yes"}:
+    if os.environ.get("ENVY_DRY_RUN", "false").lower() in {"1", "true", "yes"}:
         print(f"Would select Android SDK: {root}")
         return 0
     record(root)

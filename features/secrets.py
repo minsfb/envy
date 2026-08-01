@@ -147,9 +147,9 @@ def expanded_path(raw: str) -> Path:
 
 
 def configuration() -> Configuration:
-    manifest_path = os.environ.get("MINS_ENV_MANIFEST")
+    manifest_path = os.environ.get("ENVY_MANIFEST")
     if not manifest_path:
-        raise SecretError("MINS_ENV_MANIFEST is unavailable")
+        raise SecretError("ENVY_MANIFEST is unavailable")
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     value: Any = manifest.get("settings", {}).get("secrets", {})
     if not isinstance(value, dict):
@@ -319,7 +319,7 @@ def required_tools() -> dict[str, str]:
         raise SecretError(
             "secrets feature is not initialized; missing managed tools: "
             f"{', '.join(missing)}. Run "
-            "'mins-env upgrade --only chezmoi,mise --force' and retry"
+            "'envy upgrade --only chezmoi,mise --force' and retry"
         )
     return result
 
@@ -342,7 +342,7 @@ def open_ssh_transport(
     control_path = None
     if os.name != "nt":
         short_root = "/tmp" if Path("/tmp").is_dir() else None
-        temporary = tempfile.TemporaryDirectory(prefix="mins-env-ssh-", dir=short_root)
+        temporary = tempfile.TemporaryDirectory(prefix="envy-ssh-", dir=short_root)
         control_path = Path(temporary.name) / "control"
     transport = SshTransport(
         ssh=tools["ssh"],
@@ -456,19 +456,19 @@ def inspect_remote_identity(
     script = f"""set -eu
 target="$HOME/{remote_path}"
 if [ -L "$target" ] || {{ [ -e "$target" ] && [ ! -f "$target" ]; }}; then
-  printf 'MINS_ENV_IDENTITY invalid\\n'
+  printf 'ENVY_IDENTITY invalid\\n'
   exit 18
 fi
 {REMOTE_HASH_FUNCTION}
 if [ -f "$target" ]; then
   digest="$(hash_file "$target")" || exit 19
-  printf 'MINS_ENV_IDENTITY present %s\\n' "$digest"
+  printf 'ENVY_IDENTITY present %s\\n' "$digest"
 else
-  printf 'MINS_ENV_IDENTITY absent\\n'
+  printf 'ENVY_IDENTITY absent\\n'
 fi
 """
     process = transport.run(script, capture=True)
-    result = marker(process.stdout, "MINS_ENV_IDENTITY")
+    result = marker(process.stdout, "ENVY_IDENTITY")
     if result == ["invalid"] or process.returncode == 18:
         raise SecretError(
             "remote identity path is a symlink or non-regular file: "
@@ -528,10 +528,10 @@ chmod 600 "$target"
 {REMOTE_HASH_FUNCTION}
 digest="$(hash_file "$target")" || exit 19
 [ "$digest" = "{expected_digest}" ] || exit 20
-printf 'MINS_ENV_IDENTITY secured %s\\n' "$digest"
+printf 'ENVY_IDENTITY secured %s\\n' "$digest"
 """
     process = transport.run(script, capture=True)
-    result = marker(process.stdout, "MINS_ENV_IDENTITY")
+    result = marker(process.stdout, "ENVY_IDENTITY")
     if process.returncode != 0 or result != ["secured", expected_digest]:
         raise SecretError(
             f"could not secure the existing identity on {transport.destination}"
@@ -549,9 +549,9 @@ def install_remote_identity(
     name = remote_path.rsplit("/", 1)[-1]
     token = uuid.uuid4().hex
     remote_temporary = (
-        f"{parent}/.{name}.mins-env-{token}"
+        f"{parent}/.{name}.envy-{token}"
         if parent != "."
-        else f".{name}.mins-env-{token}"
+        else f".{name}.envy-{token}"
     )
     prepare = f"""set -eu
 target="$HOME/{remote_path}"
@@ -595,10 +595,10 @@ else
   rm -f "$temporary"
 fi
 chmod 600 "$target"
-printf 'MINS_ENV_IDENTITY installed %s\\n' "$digest"
+printf 'ENVY_IDENTITY installed %s\\n' "$digest"
 """
         process = transport.run(finalize, capture=True)
-        result = marker(process.stdout, "MINS_ENV_IDENTITY")
+        result = marker(process.stdout, "ENVY_IDENTITY")
         if process.returncode != 0 or result != ["installed", expected_digest]:
             raise SecretError(
                 f"remote identity installation failed on {options.destination} "
@@ -610,12 +610,12 @@ printf 'MINS_ENV_IDENTITY installed %s\\n' "$digest"
 
 def restore_remote_secrets(transport: SshTransport) -> None:
     script = """set -eu
-if [ -x "$HOME/.local/bin/mins-env" ]; then
-  cli="$HOME/.local/bin/mins-env"
-elif command -v mins-env >/dev/null 2>&1; then
-  cli="$(command -v mins-env)"
+if [ -x "$HOME/.local/bin/envy" ]; then
+  cli="$HOME/.local/bin/envy"
+elif command -v envy >/dev/null 2>&1; then
+  cli="$(command -v envy)"
 else
-  echo 'mins-env is not installed on the remote host' >&2
+  echo 'envy is not installed on the remote host' >&2
   exit 24
 fi
 "$cli" upgrade --only secrets --force
@@ -705,7 +705,7 @@ def push_key_with_transport(
     elif copied:
         print(
             "Encrypted sources are not copied. Sync them separately, then run "
-            "'mins-env upgrade --only secrets --force' on the remote host."
+            "'envy upgrade --only secrets --force' on the remote host."
         )
     return 0
 
@@ -765,10 +765,10 @@ def install_local_identity(
 
 
 def restore_local_secrets() -> None:
-    root = Path(os.environ.get("MINS_ENV_ROOT", Path(__file__).resolve().parent.parent))
-    cli = root / "bin" / "mins-env"
+    root = Path(os.environ.get("ENVY_ROOT", Path(__file__).resolve().parent.parent))
+    cli = root / "bin" / "envy"
     if not cli.is_file() or not os.access(cli, os.X_OK):
-        raise SecretError(f"mins-env executable is unavailable: {cli}")
+        raise SecretError(f"envy executable is unavailable: {cli}")
     for arguments in (
         ["upgrade", "--only", "secrets", "--force"],
         ["doctor", "secrets", "--verbose"],
@@ -882,7 +882,7 @@ def pull_key_with_transport(
     elif copied:
         print(
             "Encrypted sources are not copied. Sync them separately, then run "
-            "'mins-env upgrade --only secrets --force' locally."
+            "'envy upgrade --only secrets --force' locally."
         )
     return 0
 
@@ -900,12 +900,12 @@ def port_number(raw: str) -> int:
 def parse_key_transfer(argv: list[str], action: str) -> KeyTransferOptions:
     if action == "push-key":
         description = "Safely copy the configured age identity to a trusted SSH host."
-        restore_help = "run remote mins-env secrets upgrade and doctor after transfer"
+        restore_help = "run remote envy secrets upgrade and doctor after transfer"
     else:
         description = "Safely copy the configured age identity from a trusted SSH host."
-        restore_help = "run local mins-env secrets upgrade and doctor after transfer"
+        restore_help = "run local envy secrets upgrade and doctor after transfer"
     parser = argparse.ArgumentParser(
-        prog=f"mins-env secrets {action}",
+        prog=f"envy secrets {action}",
         description=description,
     )
     parser.add_argument("destination", help="SSH host, alias, or user@host")
@@ -942,7 +942,7 @@ def decrypt_source(source: EncryptedSource, identity_file: Path, sops: str) -> b
     environment.pop("SOPS_AGE_KEY", None)
     environment.pop("SOPS_AGE_KEY_CMD", None)
     environment["SOPS_AGE_KEY_FILE"] = str(identity_file)
-    descriptor, snapshot = tempfile.mkstemp(prefix="mins-env-secrets.")
+    descriptor, snapshot = tempfile.mkstemp(prefix="envy-secrets.")
     try:
         if os.name != "nt":
             os.fchmod(descriptor, 0o600)
@@ -1123,7 +1123,7 @@ def main() -> int:
             return pull_key(parse_key_transfer(sys.argv[2:], action))
         if action in {"help", "--help", "-h"}:
             print(
-                "usage: mins-env secrets {push-key|pull-key} HOST "
+                "usage: envy secrets {push-key|pull-key} HOST "
                 "[--remote-path PATH] [--port PORT] [--force] [--yes] [--restore]"
             )
             return 0

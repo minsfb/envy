@@ -17,11 +17,11 @@ The base owns:
 - the optional Pi lifecycle extension.
 
 Bundle shell behavior belongs under
-`dot_config/mins-env/shell.d/{NN-name}.pre.zsh`, `.zsh`, `.pre.bash`, or `.bash`.
+`dot_config/envy/shell.d/{NN-name}.pre.zsh`, `.zsh`, `.pre.bash`, or `.bash`.
 Pre-fragments load before portable shell defaults; regular fragments load after
 them. Machine-only changes belong in `~/.zshrc.local` or `~/.bashrc.local`.
 
-The default Chezmoi source is not pointed at a repository checkout. mins-env
+The default Chezmoi source is not pointed at a repository checkout. envy
 builds an owned source tree under the XDG data directory and always passes it
 with `--source`. This keeps multiple bundle roots explicit and makes source-file
 ownership auditable.

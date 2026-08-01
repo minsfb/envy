@@ -2,21 +2,21 @@
 # Restore tmux synchronously on demand or once near server startup.
 set -u
 
-marker="${XDG_CONFIG_HOME:-$HOME/.config}/mins-env/tmux-persistence.enabled"
+marker="${XDG_CONFIG_HOME:-$HOME/.config}/envy/tmux-persistence.enabled"
 [[ -f "$marker" ]] || exit 0
 command -v tmux >/dev/null 2>&1 || exit 0
 
 restore_startup() {
   local attempted start_time now restore_script resurrect_dir rc=0
 
-  attempted=$(tmux show-option -gqv @mins_restore_attempted 2>/dev/null)
+  attempted=$(tmux show-option -gqv @nv_restore_attempted 2>/dev/null)
   [[ "$attempted" != 1 ]] || return 0
-  tmux set-option -gq @mins_restore_attempted 1 || return 0
+  tmux set-option -gq @nv_restore_attempted 1 || return 0
 
   start_time=$(tmux display-message -p '#{start_time}' 2>/dev/null)
   now=$(date +%s)
   if [[ -z "$start_time" || $((now - start_time)) -gt 15 ]]; then
-    tmux set-option -gq @mins_restore_complete 1
+    tmux set-option -gq @nv_restore_complete 1
     return 0
   fi
 
@@ -27,37 +27,37 @@ restore_startup() {
   fi
 
   if [[ "$rc" -eq 0 ]]; then
-    tmux set-option -gq @mins_restore_complete 1
+    tmux set-option -gq @nv_restore_complete 1
   else
-    tmux set-option -gq @mins_restore_error "$rc"
+    tmux set-option -gq @nv_restore_error "$rc"
   fi
   return "$rc"
 }
 
 ensure_server() {
-  local bootstrap=__mins_restore_bootstrap created=0 status error i
+  local bootstrap=__nv_restore_bootstrap created=0 status error i
 
   if ! tmux list-sessions >/dev/null 2>&1; then
     tmux new-session -d -s "$bootstrap" || return 1
     created=1
-  elif [[ "$(tmux show-option -gqv @mins_tmux_persistence 2>/dev/null)" != 1 ]]; then
+  elif [[ "$(tmux show-option -gqv @nv_tmux_persistence 2>/dev/null)" != 1 ]]; then
     tmux source-file "$HOME/.tmux.conf" >/dev/null 2>&1 || true
   fi
 
   for ((i = 0; i < 100; i++)); do
-    status=$(tmux show-option -gqv @mins_restore_complete 2>/dev/null)
-    error=$(tmux show-option -gqv @mins_restore_error 2>/dev/null)
+    status=$(tmux show-option -gqv @nv_restore_complete 2>/dev/null)
+    error=$(tmux show-option -gqv @nv_restore_error 2>/dev/null)
     [[ "$status" == 1 || -n "$error" ]] && break
     sleep 0.1
   done
 
-  error=$(tmux show-option -gqv @mins_restore_error 2>/dev/null)
+  error=$(tmux show-option -gqv @nv_restore_error 2>/dev/null)
   if [[ -n "$error" ]]; then
-    printf 'mins-tmux-restore: restore failed with status %s\n' "$error" >&2
+    printf 'nv-tmux-restore: restore failed with status %s\n' "$error" >&2
     return "$error"
   fi
-  if [[ "$(tmux show-option -gqv @mins_restore_complete 2>/dev/null)" != 1 ]]; then
-    printf 'mins-tmux-restore: timed out waiting for tmux restore\n' >&2
+  if [[ "$(tmux show-option -gqv @nv_restore_complete 2>/dev/null)" != 1 ]]; then
+    printf 'nv-tmux-restore: timed out waiting for tmux restore\n' >&2
     return 1
   fi
 
@@ -69,5 +69,5 @@ ensure_server() {
 case ${1:-} in
   --startup) restore_startup ;;
   --ensure) ensure_server ;;
-  *) echo 'usage: mins-tmux-restore {--startup|--ensure}' >&2; exit 2 ;;
+  *) echo 'usage: nv-tmux-restore {--startup|--ensure}' >&2; exit 2 ;;
 esac

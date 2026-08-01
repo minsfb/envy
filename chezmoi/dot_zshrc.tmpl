@@ -1,14 +1,14 @@
-# .zshrc — managed by mins-env/chezmoi
-# Bundle fragments live in ~/.config/mins-env/shell.d; machine-local additions
+# .zshrc — managed by envy/chezmoi
+# Bundle fragments live in ~/.config/envy/shell.d; machine-local additions
 # go in ~/.zshrc.local. Neither location is overwritten by the public base.
 
 export PATH="$HOME/.local/bin:$PATH"
-[[ -f {{ (joinPath .xdgConfigHome "mins-env/init-sh.env") | quote }} ]] && source {{ (joinPath .xdgConfigHome "mins-env/init-sh.env") | quote }}
+[[ -f {{ (joinPath .xdgConfigHome "envy/init-sh.env") | quote }} ]] && source {{ (joinPath .xdgConfigHome "envy/init-sh.env") | quote }}
 command -v mise >/dev/null && eval "$(mise activate zsh)"
 
-_mins_shell_dir={{ (joinPath .xdgConfigHome "mins-env/shell.d") | quote }}
-if [[ -d "$_mins_shell_dir" ]]; then
-  for _mins_fragment in "$_mins_shell_dir"/*.pre.zsh(N); do source "$_mins_fragment"; done
+_nv_shell_dir={{ (joinPath .xdgConfigHome "envy/shell.d") | quote }}
+if [[ -d "$_nv_shell_dir" ]]; then
+  for _nv_fragment in "$_nv_shell_dir"/*.pre.zsh(N); do source "$_nv_fragment"; done
 fi
 
 HISTFILE="$HOME/.zsh_history"
@@ -21,7 +21,7 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*'
 typeset -U path PATH
 
 setopt PROMPT_SUBST
-mins_prompt_pwd() {
+nv_prompt_pwd() {
   local i
   local -a parts
   parts=("${(s:/:)PWD/#$HOME/~}")
@@ -33,14 +33,14 @@ mins_prompt_pwd() {
   fi
   print -r -- "${(j:/:)parts}"
 }
-mins_git_prompt() {
+nv_git_prompt() {
   command git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return
   local branch dirty
   branch="$(command git symbolic-ref --quiet --short HEAD 2>/dev/null || command git rev-parse --short HEAD 2>/dev/null)"
   [[ -n "$(command git status --porcelain 2>/dev/null)" ]] && dirty='%F{red}✗%f' || dirty='%F{green}✓%f'
   print -n -- "%F{yellow}|%F{magenta}${branch}%f${dirty}"
 }
-PROMPT='%F{green}%n%f@%F{yellow}%m%f:%F{blue}$(mins_prompt_pwd)%f$(mins_git_prompt)
+PROMPT='%F{green}%n%f@%F{yellow}%m%f:%F{blue}$(nv_prompt_pwd)%f$(nv_git_prompt)
 %(?.%F{green}.%F{red})➤%f '
 RPROMPT=''
 
@@ -48,17 +48,17 @@ alias ll='ls -la'
 command -v bat >/dev/null && alias cat='bat --paging=never --style=plain'
 command -v glow >/dev/null && alias md='glow'
 
-if [[ -d "$_mins_shell_dir" ]]; then
-  for _mins_fragment in "$_mins_shell_dir"/*.zsh(N); do
-    [[ "$_mins_fragment" == *.pre.zsh ]] || source "$_mins_fragment"
+if [[ -d "$_nv_shell_dir" ]]; then
+  for _nv_fragment in "$_nv_shell_dir"/*.zsh(N); do
+    [[ "$_nv_fragment" == *.pre.zsh ]] || source "$_nv_fragment"
   done
 fi
-unset _mins_fragment _mins_shell_dir
+unset _nv_fragment _nv_shell_dir
 
-[[ -n "${MINS_SECRETS_FILE:-}" && -f "$MINS_SECRETS_FILE" ]] && source "$MINS_SECRETS_FILE"
+[[ -n "${ENVY_SECRETS_FILE:-}" && -f "$ENVY_SECRETS_FILE" ]] && source "$ENVY_SECRETS_FILE"
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
 
-_zp_root={{ (joinPath .xdgDataHome "mins-zsh") | quote }}
+_zp_root={{ (joinPath .xdgDataHome "envy/zsh") | quote }}
 _zp_src() { [[ -r "$_zp_root/$1/$1.zsh" ]] && { source "$_zp_root/$1/$1.zsh"; return 0; }; return 1; }
 _zp_src zsh-autosuggestions
 if _zp_src zsh-history-substring-search; then
@@ -68,4 +68,4 @@ fi
 _zp_src zsh-syntax-highlighting
 unfunction _zp_src 2>/dev/null; unset _zp_root
 
-[[ -f {{ (joinPath .xdgConfigHome "mins-env/tmux-autoattach.sh") | quote }} ]] && source {{ (joinPath .xdgConfigHome "mins-env/tmux-autoattach.sh") | quote }}
+[[ -f {{ (joinPath .xdgConfigHome "envy/tmux-autoattach.sh") | quote }} ]] && source {{ (joinPath .xdgConfigHome "envy/tmux-autoattach.sh") | quote }}

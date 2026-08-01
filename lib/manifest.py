@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compose and query explicit mins-env bundles without executing manifest text."""
+"""Compose and query explicit envy bundles without executing manifest text."""
 
 from __future__ import annotations
 
@@ -18,18 +18,18 @@ ENVIRONMENT_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 HANDLERS = ("converge", "verify", "doctor", "remove")
 RESERVED_ENVIRONMENT = {
     "HOME",
-    "MINS_ENV_DIR",
-    "MINS_ENV_DRY_RUN",
-    "MINS_ENV_MANIFEST",
-    "MINS_ENV_PURGE",
-    "MINS_ENV_ROOT",
-    "MINS_ENV_STATE_FILE",
-    "MINS_ENV_LAUNCHER_ENTRYPOINT",
-    "MINS_FEATURE",
-    "MINS_FEATURE_ROOT",
-    "MINS_PLATFORM",
-    "MINS_PLATFORM_HIERARCHY",
-    "MINS_SHELL",
+    "ENVY_DIR",
+    "ENVY_DRY_RUN",
+    "ENVY_MANIFEST",
+    "ENVY_PURGE",
+    "ENVY_ROOT",
+    "ENVY_STATE_FILE",
+    "ENVY_LAUNCHER_ENTRYPOINT",
+    "ENVY_FEATURE",
+    "ENVY_FEATURE_ROOT",
+    "ENVY_PLATFORM",
+    "ENVY_PLATFORM_HIERARCHY",
+    "ENVY_SHELL",
     "OLDPWD",
     "PATH",
     "PWD",
@@ -61,7 +61,7 @@ def load_object(path: Path) -> dict[str, Any]:
 
 def bundle_manifest(raw: str) -> Path:
     path = Path(raw).expanduser().resolve()
-    return path / "mins-env.bundle.json" if path.is_dir() else path
+    return path / "envy.bundle.json" if path.is_dir() else path
 
 
 def digest(path: Path) -> str:
@@ -71,12 +71,12 @@ def digest(path: Path) -> str:
 def expand(value: str, root: Path, core_root: Path, workspace_root: Path) -> str:
     expanded = (
         value.replace("${BUNDLE_ROOT}", str(root))
-        .replace("${MINS_ENV_ROOT}", str(core_root))
+        .replace("${ENVY_ROOT}", str(core_root))
         .replace("${WORKSPACE_ROOT}", str(workspace_root))
     )
     if expanded.startswith("/") and any(
         token in value
-        for token in ("${BUNDLE_ROOT}", "${MINS_ENV_ROOT}", "${WORKSPACE_ROOT}")
+        for token in ("${BUNDLE_ROOT}", "${ENVY_ROOT}", "${WORKSPACE_ROOT}")
     ):
         return os.path.normpath(expanded)
     return expanded
@@ -289,7 +289,7 @@ def compose(core_path: Path, bundle_args: list[str]) -> dict[str, Any]:
 
     result: dict[str, Any] = {
         "version": 3,
-        "id": str(core.get("id", "mins-env")),
+        "id": str(core.get("id", "envy")),
         "presets": deepcopy(core.get("presets", {})),
         "recommended_features": [],
         "features": {},
@@ -538,7 +538,7 @@ def main() -> int:
             return 0
         return 2
     except (ManifestError, OSError) as error:
-        print(f"mins-env manifest: {error}", file=sys.stderr)
+        print(f"envy manifest: {error}", file=sys.stderr)
         return 1
 
 

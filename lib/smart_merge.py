@@ -248,7 +248,7 @@ def run_agent(
         if context is not None:
             context_path.write_bytes(context)
 
-        override = os.environ.get("MINS_SMART_MERGE_AGENT_COMMAND", "").strip()
+        override = os.environ.get("ENVY_SMART_MERGE_AGENT_COMMAND", "").strip()
         if override:
             command = [
                 *shlex.split(override),
@@ -361,10 +361,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--agent",
         choices=("auto", "claude", "none"),
-        default=os.environ.get("MINS_SMART_MERGE_AGENT", "none"),
+        default=os.environ.get("ENVY_SMART_MERGE_AGENT", "none"),
         help=(
             "agent fallback policy; 'auto' uses only an explicit "
-            "MINS_SMART_MERGE_AGENT_COMMAND"
+            "ENVY_SMART_MERGE_AGENT_COMMAND"
         ),
     )
     result.add_argument("--quiet", action="store_true")

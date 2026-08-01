@@ -12,7 +12,7 @@ LOCAL=$2
 REMOTE=$3
 MERGED=$4
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENGINE="$ROOT/bin/smart-merge"
+ENGINE="$ROOT/bin/nv-smart-merge"
 TEMP_DIR="$(mktemp -d)"
 CONTEXT="$TEMP_DIR/context.txt"
 trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -41,7 +41,7 @@ arguments=(
   --incoming "$REMOTE"
   --output "$MERGED"
   --context "$CONTEXT"
-  --agent "${MINS_SMART_MERGE_AGENT:-none}"
+  --agent "${ENVY_SMART_MERGE_AGENT:-none}"
 )
 [[ -f "$BASE" ]] && arguments=(--base "$BASE" "${arguments[@]}")
 exec "$ENGINE" "${arguments[@]}"

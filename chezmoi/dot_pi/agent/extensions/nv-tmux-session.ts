@@ -15,7 +15,7 @@ function notify(action: "start" | "end", ctx: any): void {
 		cwd: ctx.cwd ?? process.cwd(),
 	});
 
-	spawnSync(join(home, ".local", "bin", "mins-agent-register"), ["pi", action], {
+	spawnSync(join(home, ".local", "bin", "nv-agent-register"), ["pi", action], {
 		input: payload,
 		stdio: ["pipe", "ignore", "ignore"],
 		timeout: 2000,
@@ -25,13 +25,13 @@ function notify(action: "start" | "end", ctx: any): void {
 function bell(): void {
 	const home = process.env.HOME;
 	if (!home) return;
-	spawnSync(join(home, ".local", "bin", "mins-agent-notify"), ["pi"], {
+	spawnSync(join(home, ".local", "bin", "nv-agent-notify"), ["pi"], {
 		stdio: "ignore",
 		timeout: 2000,
 	});
 }
 
-export default function minsTmuxSession(pi: ExtensionAPI): void {
+export default function nvTmuxSession(pi: ExtensionAPI): void {
 	pi.on("session_start", (_event, ctx) => notify("start", ctx));
 	pi.on("session_shutdown", (_event, ctx) => notify("end", ctx));
 	pi.on("agent_settled", () => bell());

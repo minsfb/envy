@@ -33,9 +33,9 @@ def pane_metadata() -> dict[tuple[str, str, str], tuple[str, str, str]]:
             "#{session_name}",
             "#{window_index}",
             "#{pane_index}",
-            "#{@mins_agent_schema}",
-            "#{@mins_agent_kind}",
-            "#{@mins_agent_session_id}",
+            "#{@nv_agent_schema}",
+            "#{@nv_agent_kind}",
+            "#{@nv_agent_session_id}",
         )
     )
     result: dict[tuple[str, str, str], tuple[str, str, str]] = {}
@@ -80,7 +80,7 @@ def rewrite(path: Path) -> None:
                 and agent in AGENTS
                 and SESSION_ID_RE.fullmatch(session_id)
             ):
-                fields[10] = f":mins-agent-resume v1 {agent} {session_id}"
+                fields[10] = f":nv-agent-resume v1 {agent} {session_id}"
                 raw_line = "\t".join(fields)
         output.append(raw_line)
 
@@ -102,16 +102,16 @@ def rewrite(path: Path) -> None:
 
 def main() -> int:
     if len(sys.argv) != 2:
-        print("usage: mins-tmux-snapshot RESURRECT_STATE_FILE", file=sys.stderr)
+        print("usage: nv-tmux-snapshot RESURRECT_STATE_FILE", file=sys.stderr)
         return 2
     path = Path(sys.argv[1])
     if not path.is_file():
-        print(f"mins-tmux-snapshot: state file not found: {path}", file=sys.stderr)
+        print(f"nv-tmux-snapshot: state file not found: {path}", file=sys.stderr)
         return 1
     try:
         rewrite(path)
     except (OSError, UnicodeError, subprocess.SubprocessError) as error:
-        print(f"mins-tmux-snapshot: {error}", file=sys.stderr)
+        print(f"nv-tmux-snapshot: {error}", file=sys.stderr)
         return 1
     return 0
 
