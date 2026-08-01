@@ -19,7 +19,7 @@ BROKER_ENV=(
   HOME="$HOME_DIR"
   XDG_CONFIG_HOME="$CONFIG_HOME"
   XDG_STATE_HOME="$STATE_HOME"
-  MINS_ENV_ROOT="$ROOT"
+  ENVY_ROOT="$ROOT"
 )
 
 run_prompt() {
@@ -194,4 +194,4 @@ grep -qF 'Merge is available only for regular-file targets.' "$TEMP/symlink.out"
 [[ ! -L "$HOME_DIR/.linkmerge" ]] || fail 'overwrite did not replace target symlink'
 grep -q '^outside$' "$TEMP/outside" || fail 'merge followed and changed a target symlink'
 
-echo 'mins-env chezmoi conflict tests passed'
+echo 'envy chezmoi conflict tests passed'

@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location(
-    "mins_env_adb", ROOT / "features" / "adb.py"
+    "envy_adb", ROOT / "features" / "adb.py"
 )
 assert SPEC and SPEC.loader
 adb = importlib.util.module_from_spec(SPEC)
@@ -36,14 +36,14 @@ class AdbTest(unittest.TestCase):
         )
         os.environ.update(
             {
-                "MINS_ADB_SDK_ROOT": str(self.sdk),
-                "MINS_ENV_STATE_FILE": str(self.state),
-                "MINS_ENV_ROOT": str(ROOT),
+                "ENVY_ADB_SDK_ROOT": str(self.sdk),
+                "ENVY_STATE_FILE": str(self.state),
+                "ENVY_ROOT": str(ROOT),
             }
         )
 
     def tearDown(self) -> None:
-        for key in ("MINS_ADB_SDK_ROOT", "MINS_ENV_STATE_FILE", "MINS_ENV_ROOT"):
+        for key in ("ENVY_ADB_SDK_ROOT", "ENVY_STATE_FILE", "ENVY_ROOT"):
             os.environ.pop(key, None)
         self.temporary.cleanup()
 
@@ -54,7 +54,7 @@ class AdbTest(unittest.TestCase):
         self.assertEqual(adb.verify(False), 0)
 
     def test_invalid_explicit_sdk_is_rejected(self) -> None:
-        os.environ["MINS_ADB_SDK_ROOT"] = str(self.root / "missing")
+        os.environ["ENVY_ADB_SDK_ROOT"] = str(self.root / "missing")
         with self.assertRaises(adb.AdbError):
             adb.choose(adb.candidates())
 

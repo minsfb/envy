@@ -14,7 +14,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location(
-    "mins_env_secrets", ROOT / "features" / "secrets.py"
+    "envy_secrets", ROOT / "features" / "secrets.py"
 )
 assert SPEC and SPEC.loader
 secrets = importlib.util.module_from_spec(SPEC)
@@ -34,7 +34,7 @@ class SecretsTest(unittest.TestCase):
         self.bin.mkdir()
         self.original_path = os.environ.get("PATH")
         os.environ["PATH"] = f"{self.bin}{os.pathsep}{self.original_path or ''}"
-        os.environ["MINS_ENV_MANIFEST"] = str(self.manifest)
+        os.environ["ENVY_MANIFEST"] = str(self.manifest)
         self.write_tool(
             "sops",
             """#!/usr/bin/env python3
@@ -63,7 +63,7 @@ sys.stdout.buffer.write(b"EXAMPLE=private\\n")
         self.write_encrypted_source()
 
     def tearDown(self) -> None:
-        os.environ.pop("MINS_ENV_MANIFEST", None)
+        os.environ.pop("ENVY_MANIFEST", None)
         os.environ.pop("FAKE_REMOTE_HOME", None)
         os.environ.pop("FAKE_SCP_LOG", None)
         if self.original_path is None:
@@ -334,7 +334,7 @@ raise SystemExit(1)
         remote_bin = remote_home / ".local" / "bin"
         remote_bin.mkdir(parents=True)
         restore_log = self.root / "restore.log"
-        remote_cli = remote_bin / "mins-env"
+        remote_cli = remote_bin / "envy"
         remote_cli.write_text(
             "#!/bin/sh\n" f"printf '%s\\n' \"$*\" >> {str(restore_log)!r}\n",
             encoding="utf-8",
@@ -479,18 +479,18 @@ raise SystemExit(1)
         restore.assert_called_once_with()
 
     def test_local_restore_runs_upgrade_then_doctor(self) -> None:
-        local_root = self.root / "local-mins-env"
+        local_root = self.root / "local-envy"
         local_bin = local_root / "bin"
         local_bin.mkdir(parents=True)
         restore_log = self.root / "local-restore.log"
-        local_cli = local_bin / "mins-env"
+        local_cli = local_bin / "envy"
         local_cli.write_text(
             "#!/bin/sh\n" f"printf '%s\\n' \"$*\" >> {str(restore_log)!r}\n",
             encoding="utf-8",
         )
         os.chmod(local_cli, 0o755)
 
-        with mock.patch.dict(os.environ, {"MINS_ENV_ROOT": str(local_root)}):
+        with mock.patch.dict(os.environ, {"ENVY_ROOT": str(local_root)}):
             secrets.restore_local_secrets()
         self.assertEqual(
             restore_log.read_text(encoding="utf-8").splitlines(),

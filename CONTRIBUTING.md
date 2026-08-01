@@ -5,7 +5,7 @@ README:
 
 - handlers are idempotent and have non-mutating verification;
 - manifests use structured commands and explicit bundles;
-- removal touches only recorded mins-env-owned resources;
+- removal touches only recorded envy-owned resources;
 - dry-run is mutation-free;
 - credentials and private environment facts never enter source, fixtures, logs,
   state, or command arguments;

@@ -19,14 +19,14 @@ mkdir -p \
   "$HOME_DIR/.codex" \
   "$HOME_DIR/.pi/agent/extensions"
 
-for helper in mins-agent-notify mins-terminal-notify; do
+for helper in nv-agent-notify nv-terminal-notify; do
   cp "$ROOT/chezmoi/dot_local/bin/executable_$helper" "$BIN_DIR/$helper"
   chmod +x "$BIN_DIR/$helper"
 done
-cp "$ROOT/chezmoi/dot_config/opencode/plugins/mins-agent-notifications.js" \
-  "$CONFIG_DIR/opencode/plugins/mins-agent-notifications.js"
-cp "$ROOT/chezmoi/dot_pi/agent/extensions/mins-tmux-session.ts" \
-  "$HOME_DIR/.pi/agent/extensions/mins-tmux-session.ts"
+cp "$ROOT/chezmoi/dot_config/opencode/plugins/nv-agent-notifications.js" \
+  "$CONFIG_DIR/opencode/plugins/nv-agent-notifications.js"
+cp "$ROOT/chezmoi/dot_pi/agent/extensions/nv-tmux-session.ts" \
+  "$HOME_DIR/.pi/agent/extensions/nv-tmux-session.ts"
 mkdir -p "$CONFIG_DIR/alacritty"
 cp "$ROOT/chezmoi/dot_config/alacritty/alacritty.toml" \
   "$CONFIG_DIR/alacritty/alacritty.toml"
@@ -36,7 +36,7 @@ cat >"$HOME_DIR/.claude/settings.json" <<'EOF'
   "hooks": {
     "SessionStart": [{"hooks": [
       {"type": "command", "command": "keep-claude-hook"},
-      {"type": "command", "command": "\"$HOME/.local/bin/mins-agent-register\" claude start"}
+      {"type": "command", "command": "\"$HOME/.local/bin/nv-agent-register\" claude start"}
     ]}]
   }
 }
@@ -47,7 +47,7 @@ cat >"$HOME_DIR/.codex/hooks.json" <<'EOF'
   "hooks": {
     "SessionStart": [{"hooks": [
       {"type": "command", "command": "keep-codex-hook"},
-      {"type": "command", "command": "\"$HOME/.local/bin/mins-agent-register\" codex start"}
+      {"type": "command", "command": "\"$HOME/.local/bin/nv-agent-register\" codex start"}
     ]}]
   }
 }
@@ -75,13 +75,13 @@ FEATURE_ENV=(
   XDG_CONFIG_HOME="$CONFIG_DIR"
   XDG_STATE_HOME="$STATE_DIR"
   PATH="$TEMP:$BIN_DIR:/usr/bin:/bin"
-  MINS_ENV_MANIFEST="$ROOT/mins-env.json"
+  ENVY_MANIFEST="$ROOT/envy.json"
 )
 
 env "${FEATURE_ENV[@]}" "$ROOT/features/agent-notifications.py" converge >/dev/null
 env "${FEATURE_ENV[@]}" "$ROOT/features/agent-notifications.py" verify
 
-MARKER="$CONFIG_DIR/mins-env/agent-notifications.enabled"
+MARKER="$CONFIG_DIR/envy/agent-notifications.enabled"
 [[ -f "$MARKER" ]] || fail 'feature marker was not created'
 grep -q '^adapters=claude,codex,metacode,pi$' "$MARKER" || \
   fail 'feature marker does not contain selected adapters'
@@ -97,8 +97,8 @@ codex = json.load(open(sys.argv[2], encoding="utf-8"))
 assert "keep-claude-hook" in json.dumps(claude)
 assert "keep-codex-hook" in json.dumps(codex)
 assert "keep this metadata" in json.dumps(codex)
-assert "mins-agent-register" in json.dumps(claude)
-assert "mins-agent-register" in json.dumps(codex)
+assert "nv-agent-register" in json.dumps(claude)
+assert "nv-agent-register" in json.dumps(codex)
 
 def commands(value, event):
     return [
@@ -108,32 +108,32 @@ def commands(value, event):
         if "command" in item
     ]
 
-assert any("mins-agent-notify" in item for item in commands(claude, "Stop"))
-assert any("mins-agent-notify" in item for item in commands(claude, "PermissionRequest"))
+assert any("nv-agent-notify" in item for item in commands(claude, "Stop"))
+assert any("nv-agent-notify" in item for item in commands(claude, "PermissionRequest"))
 assert any(
     group.get("matcher") == "elicitation_dialog"
-    and any("mins-agent-notify" in item.get("command", "") for item in group["hooks"])
+    and any("nv-agent-notify" in item.get("command", "") for item in group["hooks"])
     for group in claude["hooks"]["Notification"]
 )
-assert any("mins-agent-notify" in item for item in commands(codex, "Stop"))
-assert any("mins-agent-notify" in item for item in commands(codex, "PermissionRequest"))
+assert any("nv-agent-notify" in item for item in commands(codex, "Stop"))
+assert any("nv-agent-notify" in item for item in commands(codex, "PermissionRequest"))
 PY
 
-grep -q '"session.idle"' "$CONFIG_DIR/opencode/plugins/mins-agent-notifications.js" || \
+grep -q '"session.idle"' "$CONFIG_DIR/opencode/plugins/nv-agent-notifications.js" || \
   fail 'MetaCode idle adapter is missing'
-grep -q 'agent_settled' "$HOME_DIR/.pi/agent/extensions/mins-tmux-session.ts" || \
+grep -q 'agent_settled' "$HOME_DIR/.pi/agent/extensions/nv-tmux-session.ts" || \
   fail 'Pi settled adapter is missing'
 
 BELL="$TEMP/bell.out"
 : >"$BELL"
 env "${FEATURE_ENV[@]}" TMUX_PANE=%1 FAKE_TTY="$BELL" FAKE_CLIENT_FLAGS=attached \
-  "$BIN_DIR/mins-agent-notify" codex
+  "$BIN_DIR/nv-agent-notify" codex
 [[ "$(od -An -tx1 "$BELL" | tr -d ' \n')" == 07 ]] || \
   fail 'agent helper did not write BEL to the pane tty'
 
 : >"$BELL"
 env "${FEATURE_ENV[@]}" TMUX_PANE=%1 FAKE_TTY="$BELL" FAKE_CLIENT_FLAGS=attached,focused \
-  "$BIN_DIR/mins-agent-notify" codex
+  "$BIN_DIR/nv-agent-notify" codex
 [[ ! -s "$BELL" ]] || fail 'unfocused condition rang in a focused tmux window'
 
 python3 - "$MARKER" <<'PY'
@@ -150,7 +150,7 @@ path.write_text(
 PY
 : >"$BELL"
 env "${FEATURE_ENV[@]}" TMUX_PANE=%1 FAKE_TTY="$BELL" FAKE_CLIENT_FLAGS=attached,focused \
-  "$BIN_DIR/mins-agent-notify" codex
+  "$BIN_DIR/nv-agent-notify" codex
 [[ "$(od -An -tx1 "$BELL" | tr -d ' \n')" == 07 ]] || \
   fail 'always condition did not ring in a focused tmux window'
 env "${FEATURE_ENV[@]}" "$ROOT/features/agent-notifications.py" converge >/dev/null
@@ -167,9 +167,9 @@ chmod +x "$TEMP/uname" "$TEMP/osascript"
 OSASCRIPT_LOG="$TEMP/osascript.log"
 touch "$OSASCRIPT_LOG"
 env "${FEATURE_ENV[@]}" TMPDIR="$TEMP" FAKE_OSASCRIPT_LOG="$OSASCRIPT_LOG" \
-  "$BIN_DIR/mins-terminal-notify"
+  "$BIN_DIR/nv-terminal-notify"
 env "${FEATURE_ENV[@]}" TMPDIR="$TEMP" FAKE_OSASCRIPT_LOG="$OSASCRIPT_LOG" \
-  "$BIN_DIR/mins-terminal-notify"
+  "$BIN_DIR/nv-terminal-notify"
 [[ "$(wc -l <"$OSASCRIPT_LOG" | tr -d ' ')" == 1 ]] || \
   fail 'local terminal notifications were not deduplicated'
 grep -q 'display notification' "$OSASCRIPT_LOG" || \
@@ -185,10 +185,10 @@ claude = json.load(open(sys.argv[1], encoding="utf-8"))
 codex = json.load(open(sys.argv[2], encoding="utf-8"))
 assert "keep-claude-hook" in json.dumps(claude)
 assert "keep-codex-hook" in json.dumps(codex)
-assert "mins-agent-register" in json.dumps(claude)
-assert "mins-agent-register" in json.dumps(codex)
-assert "mins-agent-notify" not in json.dumps(claude)
-assert "mins-agent-notify" not in json.dumps(codex)
+assert "nv-agent-register" in json.dumps(claude)
+assert "nv-agent-register" in json.dumps(codex)
+assert "nv-agent-notify" not in json.dumps(claude)
+assert "nv-agent-notify" not in json.dumps(codex)
 PY
 
 echo 'agent notification tests passed'

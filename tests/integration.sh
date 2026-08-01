@@ -22,7 +22,7 @@ command="${1:-}"
 case "$command" in
   init) mkdir -p "$HOME/.config/chezmoi" ;;
   managed)
-    printf '%s\n' .bashrc .zshrc .config/mise/config.toml .config/mise/mise.lock .config/mins-env/tmux-autoattach.sh
+    printf '%s\n' .bashrc .zshrc .config/mise/config.toml .config/mise/mise.lock .config/envy/tmux-autoattach.sh
     ;;
   status)
     [[ -f "$HOME/.fake-chezmoi-applied" ]] || printf ' A %s/.bashrc\n' "$HOME"
@@ -30,12 +30,12 @@ case "$command" in
   apply)
     [[ "${HTTPS_PROXY:-}" == proxy-value ]]
     [[ "${https_proxy:-}" == proxy-value ]]
-    mkdir -p "$HOME/.config/mise" "$HOME/.config/mins-env"
+    mkdir -p "$HOME/.config/mise" "$HOME/.config/envy"
     printf '# fake bashrc\n' >"$HOME/.bashrc"
     printf '# fake zshrc\n' >"$HOME/.zshrc"
-    cp "$MINS_ENV_ROOT/chezmoi/dot_config/mise/config.toml.tmpl" "$HOME/.config/mise/config.toml"
-    cp "$MINS_ENV_ROOT/chezmoi/dot_config/mise/mise.lock" "$HOME/.config/mise/mise.lock"
-    cp "$MINS_ENV_ROOT/chezmoi/dot_config/mins-env/tmux-autoattach.sh" "$HOME/.config/mins-env/tmux-autoattach.sh"
+    cp "$ENVY_ROOT/chezmoi/dot_config/mise/config.toml.tmpl" "$HOME/.config/mise/config.toml"
+    cp "$ENVY_ROOT/chezmoi/dot_config/mise/mise.lock" "$HOME/.config/mise/mise.lock"
+    cp "$ENVY_ROOT/chezmoi/dot_config/envy/tmux-autoattach.sh" "$HOME/.config/envy/tmux-autoattach.sh"
     touch "$HOME/.fake-chezmoi-applied"
     ;;
   doctor|verify) exit 0 ;;
@@ -68,34 +68,34 @@ chmod +x "$BIN_DIR/chezmoi" "$BIN_DIR/mise"
 run_cli() {
   HOME="$HOME_DIR" \
   PATH="$BIN_DIR:/usr/bin:/bin" \
-  MINS_PLATFORM_OVERRIDE=linux \
-  MINS_ENV_NETWORK_PROXY=proxy-value \
+  ENVY_PLATFORM_OVERRIDE=linux \
+  ENVY_NETWORK_PROXY=proxy-value \
   HTTP_PROXY='' HTTPS_PROXY='' http_proxy='' https_proxy='' \
   DOTNET_ROOT=/system/dotnet \
-  MINS_ENV_SKIP_DEPENDENCY_PINS=1 \
-  "$ROOT/bin/mins-env" "$@"
+  ENVY_SKIP_DEPENDENCY_PINS=1 \
+  "$ROOT/bin/envy" "$@"
 }
 
 run_cli install --preset core --dry-run >"$SANDBOX/dry-run.out"
-assert_not_file "$HOME_DIR/.config/mins-env/state.json"
+assert_not_file "$HOME_DIR/.config/envy/state.json"
 
 run_cli install --preset core >"$SANDBOX/install.out"
-STATE="$HOME_DIR/.config/mins-env/state.json"
+STATE="$HOME_DIR/.config/envy/state.json"
 assert_file "$STATE"
-assert_file "$HOME_DIR/.local/bin/mins-env"
-assert_file "$HOME_DIR/.config/mins-env/init-sh.env"
+assert_file "$HOME_DIR/.local/bin/envy"
+assert_file "$HOME_DIR/.config/envy/init-sh.env"
 assert_file "$HOME_DIR/.fake-mise-installed"
 assert_eq "$(python3 "$ROOT/lib/state.py" "$STATE" get schema_version)" 3
-assert_eq "$(python3 "$ROOT/lib/state.py" "$STATE" get mins_env_root)" "$ROOT"
+assert_eq "$(python3 "$ROOT/lib/state.py" "$STATE" get envy_root)" "$ROOT"
 assert_eq "$(python3 "$ROOT/lib/state.py" "$STATE" get platform_hierarchy)" "linux unix global"
 assert_eq "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["bundles"][0]["portable"])' "$STATE")" True
 assert_eq "$(python3 "$ROOT/lib/state.py" "$STATE" get features.smart-merge.enabled)" true
 assert_eq "$(python3 "$ROOT/lib/state.py" "$STATE" get features.chezmoi.enabled)" true
 assert_eq "$(python3 "$ROOT/lib/state.py" "$STATE" get features.secrets.enabled)" false
-assert_contains "$HOME_DIR/.config/mins-env/init-sh.env" "export MINS_ENV_ROOT=$ROOT"
-assert_contains "$HOME_DIR/.config/mins-env/init-sh.env" "export WORKSPACE_ROOT=$ROOT"
-assert_contains "$HOME_DIR/.config/mins-env/init-sh.env" "$ROOT/bin"
-assert_contains "$HOME_DIR/.local/bin/mins-env" "exec $ROOT/bin/mins-env"
+assert_contains "$HOME_DIR/.config/envy/init-sh.env" "export ENVY_ROOT=$ROOT"
+assert_contains "$HOME_DIR/.config/envy/init-sh.env" "export WORKSPACE_ROOT=$ROOT"
+assert_contains "$HOME_DIR/.config/envy/init-sh.env" "$ROOT/bin"
+assert_contains "$HOME_DIR/.local/bin/envy" "exec $ROOT/bin/envy"
 
 if run_cli secrets pull-key --yes test-host >"$SANDBOX/secrets-disabled.out" 2>&1; then
   fail "pull-key unexpectedly ran without the secrets feature installed"
@@ -124,9 +124,9 @@ run_cli doctor state --json >"$SANDBOX/doctor.json"
 assert_contains "$SANDBOX/doctor.json" '"state": "ok"'
 
 run_cli uninstall --dry-run >"$SANDBOX/uninstall-dry.out"
-assert_file "$HOME_DIR/.local/bin/mins-env"
+assert_file "$HOME_DIR/.local/bin/envy"
 run_cli uninstall --yes >"$SANDBOX/uninstall.out"
-assert_not_file "$HOME_DIR/.local/bin/mins-env"
+assert_not_file "$HOME_DIR/.local/bin/envy"
 assert_eq "$(python3 "$ROOT/lib/state.py" "$STATE" get installed)" false
 
-echo "mins-env standalone integration tests passed"
+echo "envy standalone integration tests passed"
