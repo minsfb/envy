@@ -6,6 +6,7 @@ ACTION="${1:-converge}"
 ENVY_ROOT="${ENVY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/envy"
 MISE_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml"
+MISE_CONFD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/mise/conf.d"
 # The path is resolved from ENVY_ROOT.
 # shellcheck disable=SC1091
 source "$ENVY_ROOT/lib/pkg.sh"
@@ -14,6 +15,17 @@ pkg_use_external_proxy
 # The core dotnet backend honors an inherited system install root. A managed
 # user install must remain under Mise's own data directory instead.
 unset DOTNET_ROOT
+
+# Bundles may layer additional tools through chezmoi-managed conf.d files.
+# Those tools have no entry in the core lockfile, so they converge with a
+# second unlocked pass that leaves the locked core tool set authoritative.
+_confd_present() {
+  local entry
+  for entry in "$MISE_CONFD_DIR"/*.toml; do
+    [[ -e "$entry" ]] && return 0
+  done
+  return 1
+}
 
 _converge() {
   [[ -f "$MISE_CONFIG" ]] || {
@@ -28,12 +40,18 @@ _converge() {
     touch "$STATE_ROOT/providers/mise.installed"
   fi
   mise install --locked
+  if _confd_present; then
+    mise install
+  fi
 }
 
 _verify() {
   command -v mise >/dev/null
   [[ -f "$MISE_CONFIG" ]]
   mise install --locked --dry-run-code >/dev/null
+  if _confd_present; then
+    mise install --dry-run-code >/dev/null
+  fi
 }
 
 _remove() {

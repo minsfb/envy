@@ -156,6 +156,22 @@ env "${FEATURE_ENV[@]}" TMUX="$tmux_env" "$BIN_DIR/nv-tmux-restore" --startup
 [[ "$(tmux -L "$SOCKET_NAME" show-option -gqv @nv_restore_complete)" == 1 ]] || \
   fail 'startup restore did not mark completion'
 
+printf 'pane\twork\t0\t1\t:*\t0\tzsh\t:/tmp\t1\tzsh\t:zsh\n' \
+  >"$TEMP/resurrect/tmux_resurrect_20250101T000000.txt"
+printf 'pane\twork\t0\t1\t:*\t0\tagent\t:/tmp\t1\tcodex\t:nv-agent-resume v1 codex session-123\n' \
+  >"$TEMP/resurrect/tmux_resurrect_20250102T000000.txt"
+ln -sf tmux_resurrect_20250101T000000.txt "$TEMP/resurrect/last"
+rm -f "$TEMP/restore-ran"
+env "${FEATURE_ENV[@]}" TMUX="$tmux_env" \
+  "$BIN_DIR/nv-tmux-snapshot" restore tmux_resurrect_20250102T000000.txt
+[[ "$(readlink "$TEMP/resurrect/last")" == tmux_resurrect_20250102T000000.txt ]] || \
+  fail 'snapshot restore did not repoint the last checkpoint'
+[[ -f "$TEMP/restore-ran" ]] || fail 'snapshot restore did not invoke the restore script'
+if env "${FEATURE_ENV[@]}" TMUX="$tmux_env" \
+  "$BIN_DIR/nv-tmux-snapshot" restore '../outside.txt' 2>/dev/null; then
+  fail 'snapshot restore accepted an invalid checkpoint name'
+fi
+
 end_payload='{"session_id":"session-123"}'
 printf '%s' "$end_payload" | env "${FEATURE_ENV[@]}" TMUX="$tmux_env" TMUX_PANE="$pane_id" \
   "$BIN_DIR/nv-agent-register" codex end

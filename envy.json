@@ -80,7 +80,7 @@
       "tier": "recommended",
       "default_enabled": true,
       "scope": {"darwin": true, "linux": true, "wsl": true},
-      "depends_on": ["chezmoi"],
+      "depends_on": ["chezmoi", "mise"],
       "converge": {"run": "features/terminal.sh", "args": ["converge"]},
       "verify": {"run": "features/terminal.sh", "args": ["verify"]},
       "doctor": {"run": "features/terminal.sh", "args": ["doctor"]},

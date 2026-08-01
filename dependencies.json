@@ -44,6 +44,14 @@
       "installed_path": "~/.local/share/envy/zsh/zsh-syntax-highlighting"
     },
     {
+      "name": "zsh-completions",
+      "version": "0.36.0",
+      "commit": "28c5bdcaf81bb89e56d0df8267d822c3b8aed9e0",
+      "license": "ZSH",
+      "url": "https://github.com/zsh-users/zsh-completions.git",
+      "installed_path": "~/.local/share/envy/zsh/zsh-completions"
+    },
+    {
       "name": "zsh-history-substring-search",
       "version": "v1.1.0",
       "commit": "400e58a87f72ecec14f783fbd29bc6be4ff1641c",

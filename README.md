@@ -67,7 +67,10 @@ manifest; manifest strings are never evaluated as shell source.
 
 Chezmoi sources are assembled in order into an owned working tree. Exact source
 path collisions are rejected. Shared top-level shell profiles instead load
-lexically ordered bundle fragments from `~/.config/envy/shell.d`.
+lexically ordered bundle fragments from `~/.config/envy/shell.d`. A bundle adds
+tools to the managed toolchain by shipping a chezmoi-managed
+`~/.config/mise/conf.d/NN-<bundle>.toml`; the core tool set stays locked while
+conf.d tools converge through a second unlocked `mise install` pass.
 
 ## Features
 
@@ -77,7 +80,7 @@ lexically ordered bundle fragments from `~/.config/envy/shell.d`.
 | `chezmoi` | core | Managed shell, tmux, Alacritty, Mise, and agent adapters |
 | `mise` | core | Install the exact tool set in the active locked Mise configuration |
 | `path` | core | Generate the selected command environment |
-| `terminal` | recommended | Require zsh/tmux and provide Alacritty on macOS |
+| `terminal` | recommended | Ensure zsh/tmux through the native package manager and provide Alacritty on macOS |
 | `agent-notifications` | recommended | Route Claude, Codex, MetaCode, and Pi attention events through terminal BEL |
 | `tmux-persistence` | recommended | Resurrect/Continuum layouts and agent-session metadata |
 | `agent-assets` | recommended | Common QA/workflow assets plus manifest-selected bundle assets with ownership tracking |
@@ -108,6 +111,14 @@ The persistence feature installs immutable Resurrect and Continuum revisions,
 saves on detach/session-close/manual events, and restores when a new tmux server
 starts. Selected Claude, Codex, and Pi adapters attach versioned session IDs,
 working-directory hints, and transcript-path hints to panes.
+
+Every save is a timestamped checkpoint; rapid manual saves stay distinct even
+within the same second. The tmux action menu's `Session snapshots` entry (or
+`nv-tmux-snapshot choose`) opens a paginated chooser that labels each
+checkpoint with its agent count and restores the selected layout. Codex session
+IDs are verified at save time against the primary non-subagent rollout file
+held open by the running Codex process, correcting hook-reported IDs before
+they are persisted; corrections are logged next to the snapshots.
 
 Restoration invokes each agent's supported resume command. It does not preserve
 process memory or copy transcript databases between hosts.

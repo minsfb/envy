@@ -1,0 +1,30 @@
+# Installer-only system packages. Keeping these out of the managed global tool
+# config lets mise treat ~/.config/mise/config.toml as safe without persistent
+# trust. mise ignores package managers that are unavailable on the platform.
+[bootstrap.packages]
+"apk:curl" = "latest"
+"apk:git" = "latest"
+"apk:jq" = "latest"
+"apk:tmux" = "latest"
+"apk:zsh" = "latest"
+
+"brew:jq" = "latest"
+"brew:tmux" = "latest"
+
+"apt:curl" = "latest"
+"apt:git" = "latest"
+"apt:jq" = "latest"
+"apt:tmux" = "latest"
+"apt:zsh" = "latest"
+
+"dnf:curl" = "latest"
+"dnf:git" = "latest"
+"dnf:jq" = "latest"
+"dnf:tmux" = "latest"
+"dnf:zsh" = "latest"
+
+"pacman:curl" = "latest"
+"pacman:git" = "latest"
+"pacman:jq" = "latest"
+"pacman:tmux" = "latest"
+"pacman:zsh" = "latest"
