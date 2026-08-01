@@ -16,6 +16,12 @@ HISTSIZE=1000000
 SAVEHIST=1000000
 setopt APPEND_HISTORY INC_APPEND_HISTORY SHARE_HISTORY
 setopt HIST_IGNORE_ALL_DUPS HIST_SAVE_NO_DUPS COMPLETE_IN_WORD
+
+_zp_root={{ (joinPath .xdgDataHome "envy/zsh") | quote }}
+if [[ -d "$_zp_root/zsh-completions/src" ]]; then
+  fpath=("$_zp_root/zsh-completions/src" $fpath)
+fi
+autoload -Uz compinit && compinit
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*'
 typeset -U path PATH

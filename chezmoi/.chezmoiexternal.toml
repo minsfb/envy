@@ -15,6 +15,11 @@
     url = "https://github.com/zsh-users/zsh-syntax-highlighting.git"
     clone.args = ["--branch", "0.8.0", "--depth", "1"]
 
+[".local/share/envy/zsh/zsh-completions"]
+    type = "git-repo"
+    url = "https://github.com/zsh-users/zsh-completions.git"
+    clone.args = ["--branch", "0.36.0", "--depth", "1"]
+
 [".local/share/envy/zsh/zsh-history-substring-search"]
     type = "git-repo"
     url = "https://github.com/zsh-users/zsh-history-substring-search.git"
