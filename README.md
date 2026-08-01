@@ -67,7 +67,10 @@ manifest; manifest strings are never evaluated as shell source.
 
 Chezmoi sources are assembled in order into an owned working tree. Exact source
 path collisions are rejected. Shared top-level shell profiles instead load
-lexically ordered bundle fragments from `~/.config/envy/shell.d`.
+lexically ordered bundle fragments from `~/.config/envy/shell.d`. A bundle adds
+tools to the managed toolchain by shipping a chezmoi-managed
+`~/.config/mise/conf.d/NN-<bundle>.toml`; the core tool set stays locked while
+conf.d tools converge through a second unlocked `mise install` pass.
 
 ## Features
 

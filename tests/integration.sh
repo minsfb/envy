@@ -47,6 +47,7 @@ EOF
 cat >"$BIN_DIR/mise" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+printf '%s\n' "$*" >>"$HOME/.fake-mise-args"
 case "${1:-}" in
   install)
     [[ "${HTTPS_PROXY:-}" == proxy-value ]]
@@ -96,6 +97,14 @@ assert_contains "$HOME_DIR/.config/envy/init-sh.env" "export ENVY_ROOT=$ROOT"
 assert_contains "$HOME_DIR/.config/envy/init-sh.env" "export WORKSPACE_ROOT=$ROOT"
 assert_contains "$HOME_DIR/.config/envy/init-sh.env" "$ROOT/bin"
 assert_contains "$HOME_DIR/.local/bin/envy" "exec $ROOT/bin/envy"
+
+mkdir -p "$HOME_DIR/.config/mise/conf.d"
+printf '[tools]\n"npm:example-tool" = "latest"\n' >"$HOME_DIR/.config/mise/conf.d/50-test.toml"
+: >"$HOME_DIR/.fake-mise-args"
+run_cli upgrade --only mise --force >"$SANDBOX/confd.out"
+grep -qx 'install --locked' "$HOME_DIR/.fake-mise-args" || fail 'locked mise install did not run'
+grep -qx 'install' "$HOME_DIR/.fake-mise-args" || fail 'conf.d mise install did not run'
+rm -rf "$HOME_DIR/.config/mise/conf.d"
 
 if run_cli secrets pull-key --yes test-host >"$SANDBOX/secrets-disabled.out" 2>&1; then
   fail "pull-key unexpectedly ran without the secrets feature installed"
