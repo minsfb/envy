@@ -83,7 +83,9 @@ def render(manifest: dict[str, Any], state: dict[str, Any], root: str) -> str:
     secrets = state_features.get("secrets", {})
     secret_settings = manifest.get("settings", {}).get("secrets", {})
     secret_target = (
-        secret_settings.get("target") if isinstance(secret_settings, dict) else None
+        secret_settings.get("target", "~/.secrets")
+        if isinstance(secret_settings, dict)
+        else None
     )
     if (
         secrets.get("enabled")
