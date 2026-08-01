@@ -80,7 +80,7 @@ conf.d tools converge through a second unlocked `mise install` pass.
 | `chezmoi` | core | Managed shell, tmux, Alacritty, Mise, and agent adapters |
 | `mise` | core | Install the exact tool set in the active locked Mise configuration |
 | `path` | core | Generate the selected command environment |
-| `terminal` | recommended | Require zsh/tmux and provide Alacritty on macOS |
+| `terminal` | recommended | Ensure zsh/tmux through the native package manager and provide Alacritty on macOS |
 | `agent-notifications` | recommended | Route Claude, Codex, MetaCode, and Pi attention events through terminal BEL |
 | `tmux-persistence` | recommended | Resurrect/Continuum layouts and agent-session metadata |
 | `agent-assets` | recommended | Common QA/workflow assets plus manifest-selected bundle assets with ownership tracking |
