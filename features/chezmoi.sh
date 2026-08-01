@@ -150,7 +150,8 @@ _composition_current() {
   [[ -n "${sources[0]+set}" ]] || return 1
   temp="$(mktemp -d "${TMPDIR:-/tmp}/envy-compose-verify.XXXXXX")"
   if python3 "$COMPOSER" "$temp/src" "${sources[@]}" >/dev/null 2>&1; then
-    diff -r -q "$temp/src" "$SRC" >/dev/null 2>&1 || rc=1
+    # chezmoi init creates .git inside the active composed source.
+    diff -r -q -x .git "$temp/src" "$SRC" >/dev/null 2>&1 || rc=1
   else
     rc=1
   fi
