@@ -1,0 +1,12 @@
+# JetBrains Mono for the managed Alacritty config (OFL-licensed, fetched from
+# the upstream release — not redistributed). This file lives under
+# private_Library/private_Fonts so both parent directories keep macOS's 0700
+# mode; .chezmoiignore scopes the whole Library tree to macOS together with
+# alacritty.toml. Offline hosts skip the download the same way as the plugin
+# clones; the terminal feature's verify/doctor reports the missing font.
+["JetBrainsMono"]
+    type = "archive"
+    url = "https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip"
+    checksum.sha256 = "6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf"
+    stripComponents = 2
+    include = ["fonts/ttf/JetBrainsMono-*.ttf"]

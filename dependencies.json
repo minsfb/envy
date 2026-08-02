@@ -28,6 +28,13 @@
       "distribution": "Mise Aqua backend"
     },
     {
+      "name": "JetBrains Mono",
+      "version": "v2.304",
+      "license": "OFL-1.1",
+      "url": "https://github.com/JetBrains/JetBrainsMono",
+      "distribution": "chezmoi external archive pinned by SHA-256, macOS only"
+    },
+    {
       "name": "zsh-autosuggestions",
       "version": "v0.7.1",
       "commit": "e52ee8ca55bcc56a17c828767a3f98f22a68d4eb",

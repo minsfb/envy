@@ -25,6 +25,10 @@
     url = "https://github.com/zsh-users/zsh-history-substring-search.git"
     clone.args = ["--branch", "v1.1.0", "--depth", "1"]
 
+# JetBrains Mono for the managed Alacritty config lives in
+# private_Library/private_Fonts/.chezmoiexternal.toml so the parent
+# directories keep macOS's 0700 mode instead of chezmoi's 0755 default.
+
 # Pinned tmux persistence plugins. envy activates them only when the
 # tmux-persistence feature marker exists; no runtime plugin manager is needed.
 [".local/share/envy/tmux/tmux-resurrect"]
