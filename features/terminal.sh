@@ -9,7 +9,13 @@ _verify() {
   command -v zsh >/dev/null 2>&1 || return 1
   command -v tmux >/dev/null 2>&1 || return 1
   if [[ "$(uname -s)" == Darwin ]]; then
-    command -v alacritty >/dev/null 2>&1 || [[ -d /Applications/Alacritty.app ]]
+    command -v alacritty >/dev/null 2>&1 || [[ -d /Applications/Alacritty.app ]] || return 1
+    # Provided by the chezmoi external; without it Alacritty silently falls
+    # back to Menlo instead of the managed JetBrains Mono config.
+    [[ -f "$HOME/Library/Fonts/JetBrainsMono/JetBrainsMono-Regular.ttf" ]] || {
+      echo "JetBrains Mono is missing from ~/Library/Fonts/JetBrainsMono; run 'envy upgrade --only chezmoi' with github.com access" >&2
+      return 1
+    }
   fi
 }
 

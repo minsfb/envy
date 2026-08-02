@@ -11,6 +11,10 @@ The locked Mise toolchain installs these secrets tools without vendoring them:
 | age | `1.3.0` | BSD-3-Clause |
 | SOPS | `3.10.2` | MPL-2.0 |
 
+On macOS, the managed Alacritty configuration fetches the JetBrains Mono
+typeface (`v2.304`, OFL-1.1) from the upstream GitHub release as a chezmoi
+external archive pinned by SHA-256; it is not vendored or redistributed.
+
 Managed shell and tmux plugin checkouts are selected by reviewed release tags
 and verified at the immutable commits recorded in `dependencies.json`:
 

@@ -19,7 +19,7 @@ dynamic_title = true
 option_as_alt = "None"
 
 [font]
-# Install with: brew install --cask font-jetbrains-mono
+# Installed by the .chezmoiexternal.toml archive into ~/Library/Fonts/JetBrainsMono.
 size = 13.0
 normal = { family = "JetBrains Mono", style = "Regular" }
 bold   = { family = "JetBrains Mono", style = "Bold" }
