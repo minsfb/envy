@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify or select immutable commits for envy-owned Git externals."""
+"""Verify pinned envy externals: Git checkouts and provisioned binaries."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import provision  # noqa: E402
 
 
 class DependencyError(RuntimeError):
@@ -34,6 +37,42 @@ def entries(root: Path) -> list[dict[str, Any]]:
     ]
 
 
+def provisioned(root: Path) -> list[dict[str, Any]]:
+    value = json.loads((root / "dependencies.json").read_text(encoding="utf-8"))
+    return [
+        item
+        for item in value.get("dependencies", [])
+        if isinstance(item, dict) and isinstance(item.get("provision"), dict)
+    ]
+
+
+def verify_binary(item: dict[str, Any], converge: bool) -> None:
+    """Hold envy-owned binaries to the pin; only warn about foreign ones."""
+    name = item["name"]
+    expected = item["version"]
+    actual = provision.installed_version(item)
+    if actual is None:
+        # Absent tools are reported by the owning feature's pkg_ensure.
+        return
+    if actual == expected:
+        return
+    owned = provision.marker(name).is_file()
+    if not owned:
+        print(
+            f"envy dependencies: {name} is {actual}; pinned at {expected} "
+            "(not installed by envy, leaving it alone)",
+            file=sys.stderr,
+        )
+        return
+    if not converge:
+        raise DependencyError(f"{name} is {actual}; expected {expected}")
+    usable, reason = provision.can_install(item)
+    if not usable:
+        raise DependencyError(f"cannot repin {name} to {expected}: {reason}")
+    if provision.install(name, force=True) != 0:
+        raise DependencyError(f"could not repin {name} to {expected}")
+
+
 def verify_one(item: dict[str, Any], converge: bool) -> None:
     raw_path = item["installed_path"]
     if raw_path.startswith("~/.local/share/") and os.environ.get("XDG_DATA_HOME"):
@@ -44,7 +83,18 @@ def verify_one(item: dict[str, Any], converge: bool) -> None:
         path = Path(raw_path).expanduser()
     expected = item["commit"]
     if not (path / ".git").exists():
-        raise DependencyError(f"{item['name']} checkout is missing: {path}")
+        # A missing checkout is drift, so verification must report it and let
+        # the feature reconverge and re-clone. Convergence itself only warns:
+        # .chezmoiexternal.toml states that a host without upstream access
+        # simply skips the clone and the shell guards its sourcing, so an
+        # unreachable external must not fail chezmoi and everything behind it.
+        if not converge:
+            raise DependencyError(f"{item['name']} checkout is missing: {path}")
+        print(
+            f"envy dependencies: {item['name']} checkout is missing: {path}",
+            file=sys.stderr,
+        )
+        return
     actual = run(path, "rev-parse", "HEAD")
     if actual.returncode != 0:
         raise DependencyError(f"cannot inspect {item['name']}: {actual.stderr.strip()}")
@@ -77,8 +127,10 @@ def main() -> int:
     try:
         for item in entries(root):
             verify_one(item, converge=action == "converge")
+        for item in provisioned(root):
+            verify_binary(item, converge=action == "converge")
         return 0
-    except (DependencyError, OSError, json.JSONDecodeError) as error:
+    except (DependencyError, provision.ProvisionError, OSError, json.JSONDecodeError) as error:
         print(f"envy dependencies: {error}", file=sys.stderr)
         return 1
 

@@ -95,6 +95,46 @@ register as drift and converge on a plain `envy upgrade`.
 | `adb` | optional | Select an existing Android SDK without downloading it |
 | `secrets` | optional | Manage SOPS+age recovery, plaintext restoration, and identity transfer over SSH |
 
+### Shell fragments
+
+The managed `.zshrc` and `.bashrc` stay small and portable. Everything
+environment-specific loads from `~/.config/envy/shell.d`, which is applied
+by Chezmoi like any other managed path:
+
+- `*.pre.zsh` and `*.pre.bash` load early, before history, prompt, and aliases,
+  for anything later configuration depends on, such as proxy variables.
+- `*.zsh` and `*.bash` load late, for aliases and helper functions.
+- Any other suffix, such as `.sh`, is ignored by both loaders and is useful for
+  a shared body that a `.pre.zsh` and a `.pre.bash` fragment both source.
+
+Machine-local additions still belong in `~/.zshrc.local` or `~/.bashrc.local`,
+which envy never overwrites. Fragments carrying organization-internal detail
+belong in a bundle rather than in envy.
+
+### Tool provisioning
+
+Chezmoi and Mise are used as found when they are already installed. When a tool
+is missing, `pkg_ensure` resolves it in order: the exact pinned release recorded
+in `dependencies.json`, then Homebrew on macOS, then any working copy already on
+`PATH`. A pinned release is downloaded from upstream and installed into
+`~/.local/bin` only when its SHA-256 digest matches the recorded value; an
+unrecorded or mismatched digest fails closed rather than installing.
+
+A tool found on `PATH` at some other version still converges — the pin is
+reported as drift by `lib/dependencies.py` instead of blocking every feature
+behind it. `envy` repins only binaries it installed itself, tracked by
+`~/.local/state/envy/providers/<tool>.installed`, and `remove --purge`
+refuses to delete an owned binary this host cannot reinstall.
+
+Digests are recorded per platform from a network-capable host, and must be
+refreshed whenever a pinned version changes:
+
+```bash
+python3 lib/provision.py record chezmoi
+python3 lib/provision.py record mise
+python3 lib/provision.py can-install chezmoi
+```
+
 ### Smart merge and managed files
 
 The core `smart-merge` feature is initialized before Chezmoi and is an explicit

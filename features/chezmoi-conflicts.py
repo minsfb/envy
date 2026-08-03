@@ -528,8 +528,19 @@ def converge(source: Path) -> int:
 
     skipped = [target for target, action in actions.items() if action == "skip"]
     if not skipped:
+        # --refresh-externals is required for recovery: chezmoi's persistent
+        # state records externals as fetched, so without it a checkout that was
+        # deleted behind chezmoi's back is never re-cloned. chezmoi also exits 0
+        # when an external clone fails, so a missing checkout is reported by
+        # lib/dependencies.py rather than detected here.
         process = run_chezmoi(
-            source, "apply", "--force", "--no-tty", "--include", "externals"
+            source,
+            "apply",
+            "--force",
+            "--no-tty",
+            "--refresh-externals=always",
+            "--include",
+            "externals",
         )
         if process.returncode != 0:
             raise BrokerError("chezmoi failed to refresh externals")

@@ -131,8 +131,14 @@ _remove() {
   fi
   if [[ "${ENVY_PURGE:-false}" == true ]]; then
     rm -rf "$HOME/.local/share/envy/zsh"
+    # Only give back an owned binary this host can reinstall, so that a purge
+    # followed by an upgrade returns to a working state.
     if [[ -f "$STATE_ROOT/providers/chezmoi.installed" && "$(command -v chezmoi 2>/dev/null || true)" == "$HOME/.local/bin/chezmoi" ]]; then
-      rm -f "$HOME/.local/bin/chezmoi"
+      if pkg_can_install chezmoi; then
+        rm -f "$HOME/.local/bin/chezmoi" "$STATE_ROOT/providers/chezmoi.installed"
+      else
+        echo "Keeping $HOME/.local/bin/chezmoi: this host has no source to reinstall the pinned version." >&2
+      fi
     fi
     rm -rf "$SRC"
     rm -rf "$BACKUP_ROOT"

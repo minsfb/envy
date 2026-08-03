@@ -59,10 +59,15 @@ _verify() {
 
 _remove() {
   # Tool downloads and shared caches may predate envy and are retained.
+  # An owned binary is only given back when this host can reinstall the pin.
   if [[ "${ENVY_PURGE:-false}" == true ]] \
     && [[ -f "$STATE_ROOT/providers/mise.installed" ]] \
     && [[ "$(command -v mise 2>/dev/null || true)" == "$HOME/.local/bin/mise" ]]; then
-    rm -f "$HOME/.local/bin/mise"
+    if pkg_can_install mise; then
+      rm -f "$HOME/.local/bin/mise" "$STATE_ROOT/providers/mise.installed"
+    else
+      echo "Keeping $HOME/.local/bin/mise: this host has no source to reinstall the pinned version." >&2
+    fi
   fi
 }
 

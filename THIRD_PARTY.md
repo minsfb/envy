@@ -4,6 +4,17 @@ envy does not vendor or redistribute the tools and plugins below. It invokes
 externally installed Chezmoi, Mise, zsh, tmux, Alacritty, Git, Python, Bash, and
 Android platform tools under their respective licenses.
 
+Chezmoi and Mise are used as found when already installed. When they are absent,
+envy may install the exact pinned release into `~/.local/bin` by downloading
+the upstream artifact recorded in `dependencies.json` and refusing to proceed
+unless its SHA-256 digest matches. Nothing is redistributed: the download comes
+from the upstream project, and an artifact with no recorded digest fails closed.
+
+| Project | Version | License |
+| --- | --- | --- |
+| Chezmoi | `2.71.1` | MIT |
+| Mise | `2026.7.11` | MIT |
+
 The locked Mise toolchain installs these secrets tools without vendoring them:
 
 | Project | Version | License |

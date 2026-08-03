@@ -5,13 +5,75 @@
       "name": "chezmoi",
       "version": "2.71.1",
       "license": "MIT",
-      "distribution": "external prerequisite or trusted package manager"
+      "url": "https://github.com/twpayne/chezmoi",
+      "distribution": "external prerequisite, trusted package manager, or verified upstream release",
+      "provision": {
+        "command": "chezmoi",
+        "brew_formula": "chezmoi",
+        "install_path": "~/.local/bin/chezmoi",
+        "version_probe": [
+          "--version"
+        ],
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_linux_amd64.tar.gz",
+            "member": "chezmoi",
+            "sha256": "e1fb16c962644d57f4d451c324aa86163d00faf5d035500f41fb48943a66dfed"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_linux_arm64.tar.gz",
+            "member": "chezmoi",
+            "sha256": "6e88c8150d3d54533ba2f335a52c2ac7b67259c525ba0f19091fc078b6852154"
+          },
+          "darwin-amd64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_darwin_amd64.tar.gz",
+            "member": "chezmoi",
+            "sha256": "1551f07cab00441540a12e663ffbf4645664319c0f91d30a5f9a255470b561cc"
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.71.1/chezmoi_2.71.1_darwin_arm64.tar.gz",
+            "member": "chezmoi",
+            "sha256": "9fad1201c328428634b8a086f767df0dfe6dd3ea1128a2a7c45bc0b16641e294"
+          }
+        }
+      }
     },
     {
       "name": "mise",
       "version": "2026.7.11",
       "license": "MIT",
-      "distribution": "external prerequisite or trusted package manager"
+      "url": "https://github.com/jdx/mise",
+      "distribution": "external prerequisite, trusted package manager, or verified upstream release",
+      "provision": {
+        "command": "mise",
+        "brew_formula": "mise",
+        "install_path": "~/.local/bin/mise",
+        "version_probe": [
+          "--version"
+        ],
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.7.11/mise-v2026.7.11-linux-x64.tar.gz",
+            "member": "mise/bin/mise",
+            "sha256": "6652ee5dd3bfa804a29355f7bb936134892bb9ac002b4cda172a44c67597cd0c"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.7.11/mise-v2026.7.11-linux-arm64.tar.gz",
+            "member": "mise/bin/mise",
+            "sha256": "fca1ffa5fb7fc848f6af0be7aa45260b5a8507fc4f97b6b974a9d60ed9647817"
+          },
+          "darwin-amd64": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.7.11/mise-v2026.7.11-macos-x64.tar.gz",
+            "member": "mise/bin/mise",
+            "sha256": "b8ba8f163c749f0f6d954145b4c424c164819218582b345700c52bad849e21fb"
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/jdx/mise/releases/download/v2026.7.11/mise-v2026.7.11-macos-arm64.tar.gz",
+            "member": "mise/bin/mise",
+            "sha256": "f1b6112a95b80d615a00ac349951a6e90a5638ab3c221a0125305391169f27bb"
+          }
+        }
+      }
     },
     {
       "name": "age",

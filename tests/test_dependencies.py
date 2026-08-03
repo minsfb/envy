@@ -59,6 +59,15 @@ class DependencyPinsTest(unittest.TestCase):
         self.assertEqual(actual, self.first)
         dependencies.verify_one(self.item(), converge=False)
 
+    def test_missing_checkout_is_drift_but_does_not_fail_convergence(self) -> None:
+        # Verification must report drift so the owning feature reconverges and
+        # re-clones; convergence itself only warns, so an unreachable external
+        # never fails chezmoi or anything downstream of it.
+        item = {**self.item(), "installed_path": str(self.repo / "absent")}
+        with self.assertRaises(dependencies.DependencyError):
+            dependencies.verify_one(item, converge=False)
+        dependencies.verify_one(item, converge=True)
+
     def test_dirty_checkout_is_not_changed(self) -> None:
         (self.repo / "value").write_text("dirty\n", encoding="utf-8")
         with self.assertRaises(dependencies.DependencyError):
