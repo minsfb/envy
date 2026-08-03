@@ -42,8 +42,8 @@ HELPERS = (
     "nv-tmux-snapshot",
 )
 PLUGIN_FILES = (
-    HOME / ".local" / "share" / "envy" / "tmux" / "tmux-resurrect" / "resurrect.tmux",
-    HOME / ".local" / "share" / "envy" / "tmux" / "tmux-continuum" / "continuum.tmux",
+    paths.data_dir() / "tmux" / "tmux-resurrect" / "resurrect.tmux",
+    paths.data_dir() / "tmux" / "tmux-continuum" / "continuum.tmux",
 )
 PI_EXTENSION = HOME / ".pi" / "agent" / "extensions" / "nv-tmux-session.ts"
 

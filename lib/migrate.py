@@ -38,8 +38,8 @@ def legacy_roots() -> list[tuple[Path, Path]]:
         (paths.xdg_config_home() / LEGACY_NAME, paths.config_dir()),
         (paths.xdg_state_home() / LEGACY_NAME, paths.state_dir()),
         (paths.xdg_data_home() / LEGACY_NAME, paths.data_dir()),
-        (paths.xdg_data_home() / "mins-zsh", paths.xdg_data_home() / "envy-zsh"),
-        (paths.xdg_data_home() / "mins-tmux", paths.xdg_data_home() / "envy-tmux"),
+        (paths.xdg_data_home() / "mins-zsh", paths.data_dir() / "zsh"),
+        (paths.xdg_data_home() / "mins-tmux", paths.data_dir() / "tmux"),
     ]
 
 

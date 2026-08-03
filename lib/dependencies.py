@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import paths  # noqa: E402
 import provision  # noqa: E402
 
 
@@ -76,9 +77,7 @@ def verify_binary(item: dict[str, Any], converge: bool) -> None:
 def verify_one(item: dict[str, Any], converge: bool) -> None:
     raw_path = item["installed_path"]
     if raw_path.startswith("~/.local/share/") and os.environ.get("XDG_DATA_HOME"):
-        path = Path(os.environ["XDG_DATA_HOME"]) / raw_path.removeprefix(
-            "~/.local/share/"
-        )
+        path = paths.xdg_data_home() / raw_path.removeprefix("~/.local/share/")
     else:
         path = Path(raw_path).expanduser()
     expected = item["commit"]

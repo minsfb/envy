@@ -86,6 +86,7 @@ _link_xdg_overrides() {
   fi
   if [[ "$data_home" != "$HOME/.local/share" ]]; then
     _link_owned_xdg_path "$HOME/.local/share/envy/zsh" "$data_home/envy/zsh"
+    _link_owned_xdg_path "$HOME/.local/share/envy/tmux" "$data_home/envy/tmux"
   fi
 }
 
@@ -131,7 +132,7 @@ _remove() {
     done < "$BACKUP_ROOT/xdg-links.list"
   fi
   if [[ "${ENVY_PURGE:-false}" == true ]]; then
-    rm -rf "$HOME/.local/share/envy/zsh"
+    rm -rf "$HOME/.local/share/envy/zsh" "$HOME/.local/share/envy/tmux"
     # Only give back an owned binary this host can reinstall, so that a purge
     # followed by an upgrade returns to a working state.
     if [[ -f "$STATE_ROOT/providers/chezmoi.installed" && "$(command -v chezmoi 2>/dev/null || true)" == "$HOME/.local/bin/chezmoi" ]]; then
