@@ -4,7 +4,8 @@ set -euo pipefail
 
 ACTION="${1:-converge}"
 ENVY_ROOT="${ENVY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/envy"
+source "$ENVY_ROOT/lib/paths.sh"
+STATE_ROOT="$ENVY_STATE_DIR"
 MISE_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml"
 MISE_CONFD_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/mise/conf.d"
 # The path is resolved from ENVY_ROOT.

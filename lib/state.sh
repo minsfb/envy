@@ -4,7 +4,9 @@
 [[ -n "${_ENVY_STATE_SH_LOADED:-}" ]] && return 0
 _ENVY_STATE_SH_LOADED=1
 
-_ENVY_STATE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/envy"
+# shellcheck source=paths.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/paths.sh"
+_ENVY_STATE_DIR="$ENVY_CONFIG_DIR"
 _ENVY_STATE_FILE="$_ENVY_STATE_DIR/state.json"
 _ENVY_STATE_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/state.py"
 export ENVY_STATE_DIR="$_ENVY_STATE_DIR" ENVY_STATE_FILE="$_ENVY_STATE_FILE"

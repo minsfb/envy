@@ -17,11 +17,15 @@ from typing import Any
 
 
 HOME = Path.home()
-CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
-STATE_HOME = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
-MARKER = CONFIG_HOME / "envy" / "agent-notifications.enabled"
-STATE_ROOT = STATE_HOME / "envy" / "agent-notifications"
-BACKUP_ROOT = STATE_HOME / "envy" / "backups" / "agent-notifications"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+import paths  # noqa: E402
+
+# XDG bases, for locations other tools own (editor, terminal, agents).
+CONFIG_HOME = paths.xdg_config_home()
+STATE_HOME = paths.xdg_state_home()
+MARKER = paths.config_dir() / "agent-notifications.enabled"
+STATE_ROOT = paths.state_dir() / "agent-notifications"
+BACKUP_ROOT = paths.state_dir() / "backups" / "agent-notifications"
 OWNERSHIP = STATE_ROOT / "ownership.json"
 HOOK_TOKEN = "nv-agent-notify"
 SUPPORTED_ADAPTERS = {"claude", "codex", "metacode", "pi"}

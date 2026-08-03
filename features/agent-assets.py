@@ -13,7 +13,10 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+import paths  # noqa: E402, Iterable
 
 
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -247,9 +250,9 @@ class AgentAssets:
         ).resolve()
         self.manifest_paths = configured_manifests(args)
         self.manifest_path = self.manifest_paths[0]
-        config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        config_home = paths.xdg_config_home()
         state_home = Path(
-            os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")
+            paths.xdg_state_home()
         )
         self.state_path = Path(
             args.state

@@ -4,10 +4,11 @@ set -euo pipefail
 
 ACTION="${1:-converge}"
 ENVY_ROOT="${ENVY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-SRC="${XDG_DATA_HOME:-$HOME/.local/share}/envy/chezmoi-source"
+source "$ENVY_ROOT/lib/paths.sh"
+SRC="$ENVY_DATA_DIR/chezmoi-source"
 CONFLICT_BROKER="$ENVY_ROOT/features/chezmoi-conflicts.py"
 COMPOSER="$ENVY_ROOT/lib/compose_chezmoi.py"
-STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/envy"
+STATE_ROOT="$ENVY_STATE_DIR"
 BACKUP_ROOT="$STATE_ROOT/backups/chezmoi"
 # shellcheck source=lib/pkg.sh
 source "$ENVY_ROOT/lib/pkg.sh"

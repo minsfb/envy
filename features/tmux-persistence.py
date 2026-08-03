@@ -17,11 +17,15 @@ from typing import Any
 
 
 HOME = Path.home()
-CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
-STATE_HOME = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
-MARKER = CONFIG_HOME / "envy" / "tmux-persistence.enabled"
-STATE_ROOT = STATE_HOME / "envy" / "tmux-persistence"
-BACKUP_ROOT = STATE_HOME / "envy" / "backups" / "tmux-persistence"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+import paths  # noqa: E402
+
+# XDG bases, for locations other tools own (editor, terminal, agents).
+CONFIG_HOME = paths.xdg_config_home()
+STATE_HOME = paths.xdg_state_home()
+MARKER = paths.config_dir() / "tmux-persistence.enabled"
+STATE_ROOT = paths.state_dir() / "tmux-persistence"
+BACKUP_ROOT = paths.state_dir() / "backups" / "tmux-persistence"
 OWNERSHIP = STATE_ROOT / "ownership.json"
 HOOK_TOKEN = "nv-agent-register"
 

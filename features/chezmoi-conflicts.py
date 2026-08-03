@@ -18,8 +18,10 @@ from typing import Any, TextIO
 
 
 HOME = Path.home().resolve()
-STATE_HOME = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
-STATE_ROOT = STATE_HOME / "envy" / "chezmoi-merges"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+import paths  # noqa: E402
+
+STATE_ROOT = paths.state_dir() / "chezmoi-merges"
 INDEX_PATH = STATE_ROOT / "index.json"
 BASE_ROOT = STATE_ROOT / "bases"
 ENVY_ROOT = Path(

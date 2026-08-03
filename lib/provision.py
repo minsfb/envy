@@ -27,6 +27,9 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import paths  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 DOWNLOAD_TIMEOUT = 180
 # Upstream release archives for these tools are single-digit megabytes; the cap
@@ -84,8 +87,7 @@ def artifact(item: dict[str, Any], key: str | None = None) -> dict[str, Any]:
 
 
 def state_root() -> Path:
-    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(base) / "envy"
+    return paths.state_dir()
 
 
 def marker(name: str) -> Path:

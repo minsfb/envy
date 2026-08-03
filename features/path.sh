@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ACTION="${1:-verify}"
-ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/envy/init-sh.env"
+# shellcheck source=../lib/paths.sh
+source "${ENVY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/lib/paths.sh"
+ENV_FILE="$ENVY_CONFIG_DIR/init-sh.env"
 
 _verify() {
   [[ -f "$ENV_FILE" ]]

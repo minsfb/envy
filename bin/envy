@@ -29,8 +29,16 @@ done
 set -- ${_ENVY_COMMAND_ARGS[0]+"${_ENVY_COMMAND_ARGS[@]}"}
 unset _ENVY_RAW_ARGS _ENVY_COMMAND_ARGS _ENVY_INDEX _ENVY_ARG
 
+# shellcheck source=lib/paths.sh
+source "$ENVY_ROOT/lib/paths.sh"
+
+# Adopt a legacy mins-env layout before anything reads state from these roots.
+if [[ "${ENVY_SKIP_MIGRATION:-0}" != 1 ]]; then
+  python3 "$ENVY_ROOT/lib/migrate.py" || true
+fi
+
 if [[ -z "${_ENVY_BUNDLES[0]+set}" ]]; then
-  _ENVY_EARLY_STATE="${XDG_CONFIG_HOME:-$HOME/.config}/envy/state.json"
+  _ENVY_EARLY_STATE="$ENVY_CONFIG_DIR/state.json"
   if [[ -f "$_ENVY_EARLY_STATE" ]]; then
     while IFS= read -r _ENVY_STORED_BUNDLE; do
       [[ -n "$_ENVY_STORED_BUNDLE" ]] && _ENVY_BUNDLES+=("$_ENVY_STORED_BUNDLE")
@@ -521,7 +529,7 @@ cmd_upgrade() {
   echo "envy upgrade"
   [[ "$dry_run" == true ]] && echo "  Mode: dry run"
   if [[ "$dry_run" == false ]]; then
-    log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/envy/logs"
+    log_dir="$ENVY_STATE_DIR/logs"
     mkdir -p "$log_dir"
     log_file="$(mktemp "$log_dir/$(date -u '+%Y%m%dT%H%M%SZ').log.XXXXXX")"
   fi
@@ -802,7 +810,7 @@ cmd_uninstall() {
     _remove_launcher
     rm -f "$(nv_state_dir)/$ENV_FILE_NAME"
     nv_state_set installed false
-    if [[ "$purge" == true ]]; then rm -rf "$(nv_state_dir)" "${XDG_STATE_HOME:-$HOME/.local/state}/envy"; fi
+    if [[ "$purge" == true ]]; then rm -rf "$(nv_state_dir)" "$ENVY_STATE_DIR"; fi
   fi
   (( failed == 0 ))
 }
