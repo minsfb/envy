@@ -138,6 +138,13 @@ class MigrateTest(unittest.TestCase):
         self.assertFalse(orphan.exists())
         self.assertTrue(keeper.exists())
 
+    def test_launcher_dry_run_does_not_migrate(self) -> None:
+        # A dry run reaches migrate() through bin/envy; it must stay read-only.
+        legacy = self.seed_legacy()
+        self.assertEqual(migrate.migrate(dry_run=True), 0)
+        self.assertTrue((legacy / "state.json").is_file())
+        self.assertFalse(paths.config_dir().exists())
+
     def test_explicit_root_override_is_honored(self) -> None:
         self.seed_legacy()
         target = self.home / "elsewhere" / "envy-config"
