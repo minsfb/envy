@@ -32,25 +32,6 @@ unset _ENVY_RAW_ARGS _ENVY_COMMAND_ARGS _ENVY_INDEX _ENVY_ARG
 # shellcheck source=lib/paths.sh
 source "$ENVY_ROOT/lib/paths.sh"
 
-# Adopt a legacy mins-env layout before anything reads state from these roots.
-# A dry run must stay mutation-free, so it only reports the plan.
-if [[ "${ENVY_SKIP_MIGRATION:-0}" != 1 ]]; then
-  _ENVY_MIGRATE_ARGS=()
-  if [[ "${ENVY_DRY_RUN:-false}" == true ]]; then
-    _ENVY_MIGRATE_ARGS=(--dry-run)
-  else
-    for _ENVY_SEEN in "$@"; do
-      if [[ "$_ENVY_SEEN" == "--dry-run" || "$_ENVY_SEEN" == "-n" ]]; then
-        _ENVY_MIGRATE_ARGS=(--dry-run)
-        break
-      fi
-    done
-  fi
-  python3 "$ENVY_ROOT/lib/migrate.py" \
-    "${_ENVY_MIGRATE_ARGS[@]+"${_ENVY_MIGRATE_ARGS[@]}"}" || true
-  unset _ENVY_MIGRATE_ARGS _ENVY_SEEN
-fi
-
 if [[ -z "${_ENVY_BUNDLES[0]+set}" ]]; then
   _ENVY_EARLY_STATE="$ENVY_CONFIG_DIR/state.json"
   if [[ -f "$_ENVY_EARLY_STATE" ]]; then
