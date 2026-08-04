@@ -3,8 +3,9 @@
 set -u
 
 [[ "$(uname -s 2>/dev/null)" == Darwin ]] || exit 0
-CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-[[ -r "$CONFIG_HOME/envy/agent-notifications.enabled" ]] || exit 0
+# Mirrors the resolution order in lib/paths.sh; nothing is inherited here.
+ENVY_CONFIG_DIR="${ENVY_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/envy}"
+[[ -r "$ENVY_CONFIG_DIR/agent-notifications.enabled" ]] || exit 0
 command -v osascript >/dev/null 2>&1 || exit 0
 
 runtime="${TMPDIR:-/tmp}"

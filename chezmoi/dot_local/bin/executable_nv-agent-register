@@ -32,16 +32,30 @@ PANE_OPTIONS = (
 )
 
 
-def config_home() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+def envy_root(override: str, base_variable: str, base_default: str) -> Path:
+    """Resolve a root envy owns.
+
+    Keep this in agreement with lib/paths.py: an explicit ENVY_* override, then
+    the XDG base, then the XDG default. This runs from tmux rather than the
+    launcher, so the exported roots are not inherited.
+    """
+    explicit = os.environ.get(override)
+    if explicit:
+        return Path(explicit).expanduser()
+    base = os.environ.get(base_variable)
+    return (Path(base) if base else Path.home() / base_default) / "envy"
 
 
-def state_home() -> Path:
-    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+def config_dir() -> Path:
+    return envy_root("ENVY_CONFIG_DIR", "XDG_CONFIG_HOME", ".config")
+
+
+def state_dir() -> Path:
+    return envy_root("ENVY_STATE_DIR", "XDG_STATE_HOME", ".local/state")
 
 
 def feature_enabled() -> bool:
-    return (config_home() / "envy" / "tmux-persistence.enabled").is_file()
+    return (config_dir() / "tmux-persistence.enabled").is_file()
 
 
 def valid_text(value: Any, *, absolute: bool = False) -> str:
@@ -78,7 +92,7 @@ def unset_pane_option(pane: str, name: str) -> None:
 
 
 def record_path(agent: str, session_id: str) -> Path:
-    return state_home() / "envy" / "agent-sessions" / agent / f"{session_id}.json"
+    return state_dir() / "agent-sessions" / agent / f"{session_id}.json"
 
 
 def atomic_json(path: Path, value: dict[str, Any]) -> None:

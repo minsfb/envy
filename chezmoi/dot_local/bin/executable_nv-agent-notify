@@ -2,8 +2,9 @@
 # Emit BEL through the originating tmux pane without writing into hook stdout.
 set -u
 
-CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-MARKER="$CONFIG_HOME/envy/agent-notifications.enabled"
+# Mirrors the resolution order in lib/paths.sh; nothing is inherited here.
+ENVY_CONFIG_DIR="${ENVY_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/envy}"
+MARKER="$ENVY_CONFIG_DIR/agent-notifications.enabled"
 testing=false
 
 if [[ "${1:-}" == --test ]]; then

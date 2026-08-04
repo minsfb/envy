@@ -2,7 +2,8 @@
 # Restore tmux synchronously on demand or once near server startup.
 set -u
 
-marker="${XDG_CONFIG_HOME:-$HOME/.config}/envy/tmux-persistence.enabled"
+# Mirrors the resolution order in lib/paths.sh; nothing is inherited from tmux.
+marker="${ENVY_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/envy}/tmux-persistence.enabled"
 [[ -f "$marker" ]] || exit 0
 command -v tmux >/dev/null 2>&1 || exit 0
 

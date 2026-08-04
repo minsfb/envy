@@ -2,15 +2,22 @@
 # Load pinned tmux persistence plugins and start one guarded restore attempt.
 set -u
 
-marker="${XDG_CONFIG_HOME:-$HOME/.config}/envy/tmux-persistence.enabled"
+# Resolve the roots envy owns. Keep this in agreement with lib/paths.sh: an
+# explicit ENVY_* override, then the XDG base, then the XDG default. This runs
+# from tmux rather than the launcher, so nothing is inherited.
+envy_config_dir="${ENVY_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/envy}"
+envy_data_dir="${ENVY_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/envy}"
+envy_bin_dir="${ENVY_BIN_DIR:-$HOME/.local/bin}"
+
+marker="$envy_config_dir/tmux-persistence.enabled"
 [[ -f "$marker" ]] || exit 0
 
-plugin_root="$HOME/.local/share/envy/tmux"
+plugin_root="$envy_data_dir/tmux"
 resurrect="$plugin_root/tmux-resurrect"
 continuum="$plugin_root/tmux-continuum"
-snapshot="$HOME/.local/bin/nv-tmux-snapshot"
-save_tool="$HOME/.local/bin/nv-tmux-save"
-restore_tool="$HOME/.local/bin/nv-tmux-restore"
+snapshot="$envy_bin_dir/nv-tmux-snapshot"
+save_tool="$envy_bin_dir/nv-tmux-save"
+restore_tool="$envy_bin_dir/nv-tmux-restore"
 
 [[ -x "$resurrect/resurrect.tmux" && -x "$continuum/continuum.tmux" ]] || exit 0
 [[ -x "$snapshot" && -x "$save_tool" && -x "$restore_tool" ]] || exit 0
