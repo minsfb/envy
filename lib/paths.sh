@@ -10,7 +10,7 @@
 [[ -n "${_ENVY_PATHS_SH_LOADED:-}" ]] && return 0
 _ENVY_PATHS_SH_LOADED=1
 
-_envy_resolve_root() {
+_nv_resolve_root() {
   local explicit="$1" base="$2" base_default="$3" leaf="$4"
   if [[ -n "$explicit" ]]; then
     echo "$explicit"
@@ -21,16 +21,16 @@ _envy_resolve_root() {
   fi
 }
 
-ENVY_CONFIG_DIR="$(_envy_resolve_root \
+ENVY_CONFIG_DIR="$(_nv_resolve_root \
   "${ENVY_CONFIG_DIR:-}" "${XDG_CONFIG_HOME:-}" ".config" "envy")"
-ENVY_STATE_DIR="$(_envy_resolve_root \
+ENVY_STATE_DIR="$(_nv_resolve_root \
   "${ENVY_STATE_DIR:-}" "${XDG_STATE_HOME:-}" ".local/state" "envy")"
-ENVY_DATA_DIR="$(_envy_resolve_root \
+ENVY_DATA_DIR="$(_nv_resolve_root \
   "${ENVY_DATA_DIR:-}" "${XDG_DATA_HOME:-}" ".local/share" "envy")"
 ENVY_BIN_DIR="${ENVY_BIN_DIR:-$HOME/.local/bin}"
 export ENVY_CONFIG_DIR ENVY_STATE_DIR ENVY_DATA_DIR ENVY_BIN_DIR
 
-envy_config_dir() { echo "$ENVY_CONFIG_DIR"; }
-envy_runtime_state_dir() { echo "$ENVY_STATE_DIR"; }
-envy_data_dir() { echo "$ENVY_DATA_DIR"; }
-envy_bin_dir() { echo "$ENVY_BIN_DIR"; }
+nv_config_dir() { echo "$ENVY_CONFIG_DIR"; }
+nv_runtime_state_dir() { echo "$ENVY_STATE_DIR"; }
+nv_data_dir() { echo "$ENVY_DATA_DIR"; }
+nv_bin_dir() { echo "$ENVY_BIN_DIR"; }
