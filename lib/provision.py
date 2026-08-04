@@ -115,6 +115,33 @@ def is_tree(item: dict[str, Any]) -> bool:
     return item["provision"].get("kind") == "tree"
 
 
+def tree_exclusions(item: dict[str, Any]) -> tuple[PurePosixPath, ...]:
+    raw = item["provision"].get("exclude_paths", [])
+    if not isinstance(raw, list):
+        raise ProvisionError(f"{item['name']} tree exclude_paths must be a list")
+    exclusions: list[PurePosixPath] = []
+    for value in raw:
+        if not isinstance(value, str) or not value:
+            raise ProvisionError(
+                f"{item['name']} tree exclude_paths entries must be non-empty strings"
+            )
+        relative = _tree_relative(value, 0)
+        if relative is None or str(relative) != value:
+            raise ProvisionError(
+                f"{item['name']} has unsafe or non-canonical exclusion: {value}"
+            )
+        if any(relative == other or other in relative.parents for other in exclusions):
+            raise ProvisionError(
+                f"{item['name']} has duplicate or overlapping exclusion: {value}"
+            )
+        if any(relative in other.parents for other in exclusions):
+            raise ProvisionError(
+                f"{item['name']} has overlapping exclusion: {value}"
+            )
+        exclusions.append(relative)
+    return tuple(exclusions)
+
+
 def managed_command(item: dict[str, Any]) -> Path | None:
     if not is_tree(item):
         return None
@@ -224,7 +251,9 @@ def _tree_relative(name: str, strip_components: int) -> PurePosixPath | None:
 
 
 def validate_tree_archive(
-    archive: Path, strip_components: int
+    archive: Path,
+    strip_components: int,
+    exclusions: tuple[PurePosixPath, ...] = (),
 ) -> list[tuple[tarfile.TarInfo, PurePosixPath]]:
     if strip_components < 0:
         raise ProvisionError("strip_components cannot be negative")
@@ -278,13 +307,39 @@ def validate_tree_archive(
     for _info, relative in selected:
         if any(parent in symlinks for parent in relative.parents):
             raise ProvisionError(f"archive member traverses symlink parent: {relative}")
-    return selected
+
+    matched: set[PurePosixPath] = set()
+    retained: list[tuple[tarfile.TarInfo, PurePosixPath]] = []
+    for info, relative in selected:
+        exclusion = next(
+            (
+                candidate
+                for candidate in exclusions
+                if relative == candidate or candidate in relative.parents
+            ),
+            None,
+        )
+        if exclusion is None:
+            retained.append((info, relative))
+            continue
+        if relative == exclusion and not info.isdir():
+            raise ProvisionError(f"tree exclusion is not a directory: {exclusion}")
+        matched.add(exclusion)
+    missing = set(exclusions) - matched
+    if missing:
+        detail = ", ".join(str(path) for path in sorted(missing))
+        raise ProvisionError(f"tree exclusions are absent from archive: {detail}")
+    return retained
 
 
 def extract_tree(
-    archive: Path, destination: Path, strip_components: int, artifact_sha256: str
+    archive: Path,
+    destination: Path,
+    strip_components: int,
+    artifact_sha256: str,
+    exclusions: tuple[PurePosixPath, ...] = (),
 ) -> None:
-    selected = validate_tree_archive(archive, strip_components)
+    selected = validate_tree_archive(archive, strip_components, exclusions)
     destination.mkdir(parents=True, exist_ok=False)
     manifest_entries: list[dict[str, Any]] = []
     try:
@@ -355,6 +410,7 @@ def extract_tree(
     manifest = {
         "version": 1,
         "artifact_sha256": artifact_sha256,
+        "excluded_paths": [str(path) for path in exclusions],
         "entries": sorted(manifest_entries, key=lambda entry: entry["path"]),
     }
     manifest_path = destination / TREE_MANIFEST
@@ -377,9 +433,11 @@ def verify_tree(item: dict[str, Any]) -> None:
     except json.JSONDecodeError as error:
         raise ProvisionError(f"invalid tree manifest: {manifest_path}") from error
     expected_artifact = artifact(item).get("sha256")
+    expected_exclusions = [str(path) for path in tree_exclusions(item)]
     if (
         manifest.get("version") != 1
         or manifest.get("artifact_sha256") != expected_artifact
+        or manifest.get("excluded_paths", []) != expected_exclusions
     ):
         raise ProvisionError(f"{item['name']} tree manifest does not match its pin")
     entries = manifest.get("entries")
@@ -448,6 +506,7 @@ def install_tree_atomically(
             extracted,
             int(entry.get("strip_components", 0)),
             str(entry["sha256"]),
+            tree_exclusions(item),
         )
         command = managed_command(item)
         assert command is not None
@@ -506,6 +565,8 @@ def can_install(item: dict[str, Any]) -> tuple[bool, str]:
         return True, "brew"
     try:
         entry = artifact(item)
+        if is_tree(item):
+            tree_exclusions(item)
     except ProvisionError as error:
         return False, str(error)
     if not entry.get("sha256"):
@@ -679,7 +740,9 @@ def record(name: str, platforms: list[str]) -> int:
             if is_tree(item):
                 try:
                     validate_tree_archive(
-                        archive, int(entry.get("strip_components", 0))
+                        archive,
+                        int(entry.get("strip_components", 0)),
+                        tree_exclusions(item),
                     )
                 except ProvisionError as error:
                     print(f"  {key}: {error}", file=sys.stderr)

@@ -87,6 +87,12 @@
         "command": "code-server",
         "executable": "bin/code-server",
         "install_path": "${ENVY_DATA_DIR}/tools/remote-development/code-server/4.131.0",
+        "exclude_paths": [
+          "lib/vscode/extensions/copilot",
+          "lib/vscode/extensions/github",
+          "lib/vscode/extensions/github-authentication",
+          "lib/vscode/extensions/microsoft-authentication"
+        ],
         "version_probe": [
           "--config",
           "/dev/null",

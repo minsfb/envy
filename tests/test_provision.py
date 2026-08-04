@@ -85,7 +85,9 @@ class ProvisionTest(unittest.TestCase):
             json.dumps(document, indent=2), encoding="utf-8"
         )
 
-    def tree_archive(self, escaping_symlink: bool = False) -> Path:
+    def tree_archive(
+        self, escaping_symlink: bool = False, with_extensions: bool = False
+    ) -> Path:
         path = self.base / "fixturetree.tar.gz"
         with tarfile.open(path, "w:gz") as bundle:
             executable = tarfile.TarInfo("fixturetree/bin/fixturetool")
@@ -99,9 +101,20 @@ class ProvisionTest(unittest.TestCase):
             link.type = tarfile.SYMTYPE
             link.linkname = "../../escape" if escaping_symlink else "fixturetool"
             bundle.addfile(link)
+            if with_extensions:
+                for name in ("keep", "remove"):
+                    extension = tarfile.TarInfo(
+                        f"fixturetree/lib/extensions/{name}/package.json"
+                    )
+                    payload = json.dumps({"name": name}).encode()
+                    extension.size = len(payload)
+                    extension.mode = 0o644
+                    bundle.addfile(extension, io.BytesIO(payload))
         return path
 
-    def write_tree_manifest(self, archive: Path) -> None:
+    def write_tree_manifest(
+        self, archive: Path, exclude_paths: list[str] | None = None
+    ) -> None:
         document = {
             "version": 1,
             "dependencies": [
@@ -114,6 +127,7 @@ class ProvisionTest(unittest.TestCase):
                         "command": "fixturetool",
                         "executable": "bin/fixturetool",
                         "install_path": "${ENVY_DATA_DIR}/tools/fixturetool/1.2.3",
+                        "exclude_paths": exclude_paths or [],
                         "version_pattern": "(?m)^(\\d+(?:\\.\\d+)+)\\b",
                         "artifacts": {
                             provision.platform_key(): {
@@ -240,6 +254,47 @@ class ProvisionTest(unittest.TestCase):
             provision.install_path(provision.dependency("fixturetool")).exists()
         )
 
+    def test_tree_excludes_declared_paths_and_records_policy(self) -> None:
+        archive = self.tree_archive(with_extensions=True)
+        exclusion = "lib/extensions/remove"
+        self.write_tree_manifest(archive, [exclusion])
+        self.assertEqual(provision.install("fixturetool"), 0)
+        item = provision.dependency("fixturetool")
+        target = provision.install_path(item)
+        self.assertTrue((target / "lib/extensions/keep/package.json").is_file())
+        self.assertFalse((target / exclusion).exists())
+        manifest = json.loads(
+            (target / provision.TREE_MANIFEST).read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["excluded_paths"], [exclusion])
+        provision.verify_tree(item)
+
+    def test_tree_rejects_exclusion_absent_from_archive(self) -> None:
+        archive = self.tree_archive(with_extensions=True)
+        self.write_tree_manifest(archive, ["lib/extensions/absent"])
+        with self.assertRaisesRegex(
+            provision.ProvisionError, "exclusions are absent from archive"
+        ):
+            provision.install("fixturetool")
+
+    def test_tree_rejects_excluding_a_file(self) -> None:
+        archive = self.tree_archive()
+        self.write_tree_manifest(archive, ["bin/fixturetool"])
+        with self.assertRaisesRegex(
+            provision.ProvisionError, "exclusion is not a directory"
+        ):
+            provision.install("fixturetool")
+
+    def test_tree_verification_detects_exclusion_policy_change(self) -> None:
+        archive = self.tree_archive(with_extensions=True)
+        self.write_tree_manifest(archive, ["lib/extensions/remove"])
+        self.assertEqual(provision.install("fixturetool"), 0)
+        self.write_tree_manifest(archive, ["lib/extensions/keep"])
+        with self.assertRaisesRegex(
+            provision.ProvisionError, "manifest does not match its pin"
+        ):
+            provision.verify_tree(provision.dependency("fixturetool"))
+
     def test_owned_tree_can_be_removed(self) -> None:
         archive = self.tree_archive()
         self.write_tree_manifest(archive)
@@ -289,6 +344,23 @@ class PinEnforcementTest(unittest.TestCase):
         provision.marker("fixturetool").touch()
         with self.assertRaises(dependencies.DependencyError):
             dependencies.verify_binary(self.item(), converge=False)
+
+
+class RepositoryPolicyTest(unittest.TestCase):
+    def test_code_server_excludes_vendor_service_integrations(self) -> None:
+        document = json.loads((ROOT / "dependencies.json").read_text(encoding="utf-8"))
+        code_server = next(
+            item for item in document["dependencies"] if item["name"] == "code-server"
+        )
+        self.assertEqual(
+            code_server["provision"]["exclude_paths"],
+            [
+                "lib/vscode/extensions/copilot",
+                "lib/vscode/extensions/github",
+                "lib/vscode/extensions/github-authentication",
+                "lib/vscode/extensions/microsoft-authentication",
+            ],
+        )
 
 
 if __name__ == "__main__":

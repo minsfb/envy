@@ -506,9 +506,12 @@ failures with focused guidance.
 ### Extension registry policy
 
 Base Envy configures the public Open VSX service and does not install any
-extensions in version 1. Code OSS built-ins remain available, and users install
-and update additional extensions interactively. All installed extensions are
-user data that Envy neither claims nor removes.
+extensions in version 1. Code OSS built-ins remain available except for the
+bundled Copilot Chat, GitHub, GitHub Authentication, and Microsoft
+Authentication service integrations, which provisioning deterministically
+excludes from Envy's verified editor tree. Users install and update additional
+extensions interactively. All installed extensions are user data that Envy
+neither claims nor removes.
 
 A trusted bundle can replace the registry. Keep the Open VSX default in handler
 policy rather than as conflicting scalar values in `envy.json`; the current

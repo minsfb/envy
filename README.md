@@ -159,7 +159,9 @@ Envy uses Open VSX and installs no extensions. A trusted bundle can replace all
 three registry endpoints and the grace period through
 `settings.remote_development.extension_registry` and
 `idle_grace_seconds` (0–3600). User editor data, interactively installed
-extensions, and source trees survive both ordinary removal and purge.
+extensions, and source trees survive both ordinary removal and purge. Envy's
+provisioned Code OSS tree excludes the bundled Copilot Chat, GitHub,
+GitHub Authentication, and Microsoft Authentication service integrations.
 
 The browser client is the v1 adapter. Its session and engine boundary leaves
 room for a future native client, but a VS Code-style native client will require
