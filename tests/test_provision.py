@@ -106,14 +106,23 @@ class ProvisionTest(unittest.TestCase):
                     extension = tarfile.TarInfo(
                         f"fixturetree/lib/extensions/{name}/package.json"
                     )
-                    payload = json.dumps({"name": name}).encode()
+                    payload = json.dumps(
+                        {
+                            "name": name,
+                            "main": "./dist/node.js",
+                            "browser": "./dist/browser.js",
+                        }
+                    ).encode()
                     extension.size = len(payload)
                     extension.mode = 0o644
                     bundle.addfile(extension, io.BytesIO(payload))
         return path
 
     def write_tree_manifest(
-        self, archive: Path, exclude_paths: list[str] | None = None
+        self,
+        archive: Path,
+        exclude_paths: list[str] | None = None,
+        remove_json_fields: list[dict[str, object]] | None = None,
     ) -> None:
         document = {
             "version": 1,
@@ -128,6 +137,7 @@ class ProvisionTest(unittest.TestCase):
                         "executable": "bin/fixturetool",
                         "install_path": "${ENVY_DATA_DIR}/tools/fixturetool/1.2.3",
                         "exclude_paths": exclude_paths or [],
+                        "remove_json_fields": remove_json_fields or [],
                         "version_pattern": "(?m)^(\\d+(?:\\.\\d+)+)\\b",
                         "artifacts": {
                             provision.platform_key(): {
@@ -295,6 +305,81 @@ class ProvisionTest(unittest.TestCase):
         ):
             provision.verify_tree(provision.dependency("fixturetool"))
 
+    def test_tree_removes_verified_json_field_and_records_policy(self) -> None:
+        archive = self.tree_archive(with_extensions=True)
+        removal = {
+            "path": "lib/extensions/keep/package.json",
+            "field": "browser",
+            "expected": "./dist/browser.js",
+        }
+        self.write_tree_manifest(archive, remove_json_fields=[removal])
+        self.assertEqual(provision.install("fixturetool"), 0)
+        item = provision.dependency("fixturetool")
+        target = provision.install_path(item)
+        package = json.loads(
+            (target / removal["path"]).read_text(encoding="utf-8")
+        )
+        self.assertEqual(package["main"], "./dist/node.js")
+        self.assertNotIn("browser", package)
+        manifest = json.loads(
+            (target / provision.TREE_MANIFEST).read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["removed_json_fields"], [removal])
+        provision.verify_tree(item)
+
+    def test_tree_json_field_removal_fails_when_expected_value_changes(self) -> None:
+        archive = self.tree_archive(with_extensions=True)
+        removal = {
+            "path": "lib/extensions/keep/package.json",
+            "field": "browser",
+            "expected": "./unexpected.js",
+        }
+        self.write_tree_manifest(archive, remove_json_fields=[removal])
+        with self.assertRaisesRegex(provision.ProvisionError, "value changed"):
+            provision.install("fixturetool")
+
+    def test_tree_json_field_removal_fails_when_field_is_absent(self) -> None:
+        archive = self.tree_archive(with_extensions=True)
+        removal = {
+            "path": "lib/extensions/keep/package.json",
+            "field": "absent",
+            "expected": "./dist/browser.js",
+        }
+        self.write_tree_manifest(archive, remove_json_fields=[removal])
+        with self.assertRaisesRegex(provision.ProvisionError, "removal is absent"):
+            provision.install("fixturetool")
+
+    def test_tree_json_field_removal_cannot_target_excluded_path(self) -> None:
+        archive = self.tree_archive(with_extensions=True)
+        removal = {
+            "path": "lib/extensions/remove/package.json",
+            "field": "browser",
+            "expected": "./dist/browser.js",
+        }
+        self.write_tree_manifest(
+            archive,
+            exclude_paths=["lib/extensions/remove"],
+            remove_json_fields=[removal],
+        )
+        usable, reason = provision.can_install(provision.dependency("fixturetool"))
+        self.assertFalse(usable)
+        self.assertIn("targets excluded path", reason)
+
+    def test_tree_verification_detects_json_removal_policy_change(self) -> None:
+        archive = self.tree_archive(with_extensions=True)
+        removal = {
+            "path": "lib/extensions/keep/package.json",
+            "field": "browser",
+            "expected": "./dist/browser.js",
+        }
+        self.write_tree_manifest(archive, remove_json_fields=[removal])
+        self.assertEqual(provision.install("fixturetool"), 0)
+        self.write_tree_manifest(archive)
+        with self.assertRaisesRegex(
+            provision.ProvisionError, "manifest does not match its pin"
+        ):
+            provision.verify_tree(provision.dependency("fixturetool"))
+
     def test_owned_tree_can_be_removed(self) -> None:
         archive = self.tree_archive()
         self.write_tree_manifest(archive)
@@ -361,6 +446,27 @@ class RepositoryPolicyTest(unittest.TestCase):
                 "lib/vscode/extensions/microsoft-authentication",
             ],
         )
+
+    def test_code_server_removes_only_unshipped_browser_entrypoints(self) -> None:
+        document = json.loads((ROOT / "dependencies.json").read_text(encoding="utf-8"))
+        code_server = next(
+            item for item in document["dependencies"] if item["name"] == "code-server"
+        )
+        removals = code_server["provision"]["remove_json_fields"]
+        self.assertEqual(len(removals), 18)
+        self.assertEqual(
+            next(
+                item
+                for item in removals
+                if item["path"] == "lib/vscode/extensions/git-base/package.json"
+            ),
+            {
+                "path": "lib/vscode/extensions/git-base/package.json",
+                "field": "browser",
+                "expected": "./dist/browser/extension.js",
+            },
+        )
+        self.assertTrue(all(item["field"] == "browser" for item in removals))
 
 
 if __name__ == "__main__":

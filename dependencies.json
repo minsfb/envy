@@ -93,6 +93,98 @@
           "lib/vscode/extensions/github-authentication",
           "lib/vscode/extensions/microsoft-authentication"
         ],
+        "remove_json_fields": [
+          {
+            "path": "lib/vscode/extensions/configuration-editing/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/configurationEditingMain"
+          },
+          {
+            "path": "lib/vscode/extensions/css-language-features/package.json",
+            "field": "browser",
+            "expected": "./client/dist/browser/cssClientMain"
+          },
+          {
+            "path": "lib/vscode/extensions/emmet/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/emmetBrowserMain"
+          },
+          {
+            "path": "lib/vscode/extensions/extension-editing/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extensionEditingBrowserMain"
+          },
+          {
+            "path": "lib/vscode/extensions/git-base/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension.js"
+          },
+          {
+            "path": "lib/vscode/extensions/html-language-features/package.json",
+            "field": "browser",
+            "expected": "./client/dist/browser/htmlClientMain"
+          },
+          {
+            "path": "lib/vscode/extensions/ipynb/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/ipynbMain.browser.js"
+          },
+          {
+            "path": "lib/vscode/extensions/json-language-features/package.json",
+            "field": "browser",
+            "expected": "./client/dist/browser/jsonClientMain"
+          },
+          {
+            "path": "lib/vscode/extensions/markdown-language-features/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension"
+          },
+          {
+            "path": "lib/vscode/extensions/markdown-math/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension"
+          },
+          {
+            "path": "lib/vscode/extensions/media-preview/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension.js"
+          },
+          {
+            "path": "lib/vscode/extensions/merge-conflict/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/mergeConflictMain"
+          },
+          {
+            "path": "lib/vscode/extensions/mermaid-markdown-features/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension"
+          },
+          {
+            "path": "lib/vscode/extensions/npm/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/npmBrowserMain"
+          },
+          {
+            "path": "lib/vscode/extensions/references-view/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension"
+          },
+          {
+            "path": "lib/vscode/extensions/search-result/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension"
+          },
+          {
+            "path": "lib/vscode/extensions/simple-browser/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension"
+          },
+          {
+            "path": "lib/vscode/extensions/typescript-language-features/package.json",
+            "field": "browser",
+            "expected": "./dist/browser/extension"
+          }
+        ],
         "version_probe": [
           "--config",
           "/dev/null",

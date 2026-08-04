@@ -142,6 +142,56 @@ def tree_exclusions(item: dict[str, Any]) -> tuple[PurePosixPath, ...]:
     return tuple(exclusions)
 
 
+def tree_json_field_removals(item: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    raw = item["provision"].get("remove_json_fields", [])
+    if not isinstance(raw, list):
+        raise ProvisionError(f"{item['name']} tree remove_json_fields must be a list")
+    exclusions = tree_exclusions(item)
+    removals: list[dict[str, Any]] = []
+    seen: set[tuple[PurePosixPath, str]] = set()
+    for value in raw:
+        if not isinstance(value, dict) or set(value) != {"path", "field", "expected"}:
+            raise ProvisionError(
+                f"{item['name']} tree remove_json_fields entries require "
+                "path, field, and expected"
+            )
+        raw_path = value["path"]
+        field = value["field"]
+        if not isinstance(raw_path, str) or not raw_path:
+            raise ProvisionError(
+                f"{item['name']} tree JSON field removal path must be a non-empty string"
+            )
+        relative = _tree_relative(raw_path, 0)
+        if relative is None or str(relative) != raw_path:
+            raise ProvisionError(
+                f"{item['name']} has unsafe or non-canonical JSON path: {raw_path}"
+            )
+        if not isinstance(field, str) or not field:
+            raise ProvisionError(
+                f"{item['name']} tree JSON field removal field must be a non-empty string"
+            )
+        if any(relative == path or path in relative.parents for path in exclusions):
+            raise ProvisionError(
+                f"{item['name']} JSON field removal targets excluded path: {raw_path}"
+            )
+        identity = (relative, field)
+        if identity in seen:
+            raise ProvisionError(
+                f"{item['name']} has duplicate JSON field removal: {raw_path}#{field}"
+            )
+        try:
+            json.dumps(value["expected"])
+        except (TypeError, ValueError) as error:
+            raise ProvisionError(
+                f"{item['name']} has non-JSON expected value for {raw_path}#{field}"
+            ) from error
+        seen.add(identity)
+        removals.append(
+            {"path": str(relative), "field": field, "expected": value["expected"]}
+        )
+    return tuple(removals)
+
+
 def managed_command(item: dict[str, Any]) -> Path | None:
     if not is_tree(item):
         return None
@@ -338,6 +388,7 @@ def extract_tree(
     strip_components: int,
     artifact_sha256: str,
     exclusions: tuple[PurePosixPath, ...] = (),
+    json_field_removals: tuple[dict[str, Any], ...] = (),
 ) -> None:
     selected = validate_tree_archive(archive, strip_components, exclusions)
     destination.mkdir(parents=True, exist_ok=False)
@@ -395,6 +446,42 @@ def extract_tree(
                         "target": info.linkname,
                     }
                 )
+
+        entries_by_path = {entry["path"]: entry for entry in manifest_entries}
+        for removal in json_field_removals:
+            relative = _tree_relative(removal["path"], 0)
+            assert relative is not None
+            target = destination.joinpath(*relative.parts)
+            if not target.is_file() or target.is_symlink():
+                raise ProvisionError(
+                    f"tree JSON field removal target is not a regular file: {relative}"
+                )
+            try:
+                document = json.loads(target.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise ProvisionError(
+                    f"tree JSON field removal target is invalid JSON: {relative}"
+                ) from error
+            field = removal["field"]
+            if not isinstance(document, dict) or field not in document:
+                raise ProvisionError(
+                    f"tree JSON field removal is absent: {relative}#{field}"
+                )
+            if document[field] != removal["expected"]:
+                raise ProvisionError(
+                    f"tree JSON field removal value changed: {relative}#{field}"
+                )
+            del document[field]
+            mode = stat.S_IMODE(target.stat().st_mode)
+            target.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+            target.chmod(mode)
+            entry = entries_by_path.get(str(relative))
+            if entry is None or entry.get("type") != "file":
+                raise ProvisionError(
+                    f"tree JSON field removal target is not inventoried: {relative}"
+                )
+            entry["size"] = target.stat().st_size
+            entry["sha256"] = digest_of(target)
         for path in destination.rglob("*"):
             if path.is_dir() and not path.is_symlink():
                 manifest_entries.append(
@@ -411,6 +498,7 @@ def extract_tree(
         "version": 1,
         "artifact_sha256": artifact_sha256,
         "excluded_paths": [str(path) for path in exclusions],
+        "removed_json_fields": list(json_field_removals),
         "entries": sorted(manifest_entries, key=lambda entry: entry["path"]),
     }
     manifest_path = destination / TREE_MANIFEST
@@ -434,10 +522,12 @@ def verify_tree(item: dict[str, Any]) -> None:
         raise ProvisionError(f"invalid tree manifest: {manifest_path}") from error
     expected_artifact = artifact(item).get("sha256")
     expected_exclusions = [str(path) for path in tree_exclusions(item)]
+    expected_removals = list(tree_json_field_removals(item))
     if (
         manifest.get("version") != 1
         or manifest.get("artifact_sha256") != expected_artifact
         or manifest.get("excluded_paths", []) != expected_exclusions
+        or manifest.get("removed_json_fields", []) != expected_removals
     ):
         raise ProvisionError(f"{item['name']} tree manifest does not match its pin")
     entries = manifest.get("entries")
@@ -507,6 +597,7 @@ def install_tree_atomically(
             int(entry.get("strip_components", 0)),
             str(entry["sha256"]),
             tree_exclusions(item),
+            tree_json_field_removals(item),
         )
         command = managed_command(item)
         assert command is not None
@@ -567,6 +658,7 @@ def can_install(item: dict[str, Any]) -> tuple[bool, str]:
         entry = artifact(item)
         if is_tree(item):
             tree_exclusions(item)
+            tree_json_field_removals(item)
     except ProvisionError as error:
         return False, str(error)
     if not entry.get("sha256"):
@@ -739,10 +831,13 @@ def record(name: str, platforms: list[str]) -> int:
             member = entry.get("member")
             if is_tree(item):
                 try:
-                    validate_tree_archive(
+                    extract_tree(
                         archive,
+                        Path(scratch) / "tree",
                         int(entry.get("strip_components", 0)),
+                        value,
                         tree_exclusions(item),
+                        tree_json_field_removals(item),
                     )
                 except ProvisionError as error:
                     print(f"  {key}: {error}", file=sys.stderr)

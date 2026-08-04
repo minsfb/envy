@@ -162,7 +162,11 @@ three registry endpoints and the grace period through
 `idle_grace_seconds` (0–3600). User editor data, interactively installed
 extensions, and source trees survive both ordinary removal and purge. Envy's
 provisioned Code OSS tree excludes the bundled Copilot Chat, GitHub,
-GitHub Authentication, and Microsoft Authentication service integrations.
+GitHub Authentication, and Microsoft Authentication service integrations. It
+also removes only the built-in browser entrypoints that the pinned artifact
+advertises but does not ship, so those extensions use their included remote
+Node entrypoints on the first connection. Extension discovery caches are
+refreshed when the provisioned tree or installed extension inventory changes.
 
 The browser client is the v1 adapter. Its session and engine boundary leaves
 room for a future native client, but a VS Code-style native client will require

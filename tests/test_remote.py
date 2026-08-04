@@ -112,10 +112,13 @@ while True: time.sleep(1)
         original_command = self.feature.provision.managed_command
         original_settings = self.feature.settings
         original_runtime = self.feature.runtime_dir
+        original_fingerprint = self.feature.extension_fingerprint
         self.feature.provision.dependency = lambda _name: {"version": "1.2.3"}
         self.feature.provision.managed_command = lambda _item: executable
         self.feature.settings = lambda: (300, self.feature.DEFAULT_REGISTRY)
         self.feature.runtime_dir = lambda: self.base / "r"
+        fingerprint = ["inventory-one"]
+        self.feature.extension_fingerprint = lambda: fingerprint[0]
 
         def identity(pid: int):
             try:
@@ -135,6 +138,12 @@ while True: time.sleep(1)
             first = self.feature.start_engine()
             second = self.feature.start_engine()
             self.assertEqual(first["pid"], second["pid"])
+            fingerprint[0] = "inventory-two"
+            unchanged = self.feature.start_engine()
+            self.assertEqual(first["pid"], unchanged["pid"])
+            restarted = self.feature.start_engine(restart_if_changed=True)
+            self.assertNotEqual(first["pid"], restarted["pid"])
+            self.assertEqual(restarted["fingerprint"], "inventory-two")
             self.assertTrue(self.feature.socket_path().is_socket())
         finally:
             self.feature.stop_engine()
@@ -142,7 +151,68 @@ while True: time.sleep(1)
             self.feature.provision.managed_command = original_command
             self.feature.settings = original_settings
             self.feature.runtime_dir = original_runtime
+            self.feature.extension_fingerprint = original_fingerprint
         self.assertFalse(self.feature.ENGINE_STATE.exists())
+
+    def test_extension_cache_invalidation_is_scoped_and_idempotent(self) -> None:
+        user_data = self.feature.DATA / "user-data" / "code-server"
+        profile = user_data / "CachedProfilesData" / "__default__profile__"
+        user = user_data / "User"
+        profile.mkdir(parents=True)
+        user.mkdir(parents=True)
+        caches = [
+            profile / "extensions.builtin.cache",
+            profile / "extensions.user.cache",
+            user / "customBuiltinExtensionsCache.json",
+            user / "systemExtensionsCache.json",
+        ]
+        for cache in caches:
+            cache.write_text("stale", encoding="utf-8")
+        unrelated = profile / "workspace.json"
+        unrelated.write_text("keep", encoding="utf-8")
+        root_unrelated = profile.parent / "metadata.json"
+        root_unrelated.write_text("keep", encoding="utf-8")
+
+        self.feature.invalidate_extension_caches(user_data, "inventory-one")
+        self.assertTrue(all(not cache.exists() for cache in caches))
+        self.assertEqual(unrelated.read_text(encoding="utf-8"), "keep")
+        self.assertEqual(root_unrelated.read_text(encoding="utf-8"), "keep")
+
+        caches[0].write_text("new cache", encoding="utf-8")
+        self.feature.invalidate_extension_caches(user_data, "inventory-one")
+        self.assertTrue(caches[0].is_file())
+        self.feature.invalidate_extension_caches(user_data, "inventory-two")
+        self.assertFalse(caches[0].exists())
+
+    def test_extension_fingerprint_tracks_tree_and_extension_manifests(self) -> None:
+        tree = self.base / "engine"
+        tree.mkdir()
+        manifest = tree / self.feature.provision.TREE_MANIFEST
+        manifest.write_text('{"artifact":"one"}\n', encoding="utf-8")
+        with (
+            mock.patch.object(
+                self.feature.provision,
+                "dependency",
+                return_value={"version": "1.2.3"},
+            ),
+            mock.patch.object(
+                self.feature.provision, "install_path", return_value=tree
+            ),
+        ):
+            initial = self.feature.extension_fingerprint()
+            package = (
+                self.feature.DATA
+                / "extensions"
+                / "example.extension"
+                / "package.json"
+            )
+            package.parent.mkdir(parents=True)
+            package.write_text('{"version":"1.0.0"}\n', encoding="utf-8")
+            with_extension = self.feature.extension_fingerprint()
+            package.write_text('{"version":"1.0.1"}\n', encoding="utf-8")
+            updated_extension = self.feature.extension_fingerprint()
+        self.assertNotEqual(initial, with_extension)
+        self.assertNotEqual(with_extension, updated_extension)
 
     def test_feature_lifecycle_retains_user_data_on_removal(self) -> None:
         version_root = self.base / "engine" / "1.2.3"

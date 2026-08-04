@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import shutil
@@ -178,10 +179,76 @@ def clean_stale_leases() -> list[Path]:
     return active
 
 
-def start_engine() -> dict[str, Any]:
+def extension_fingerprint() -> str:
+    item = provision.dependency(DEPENDENCY)
+    tree_manifest = provision.install_path(item) / provision.TREE_MANIFEST
+    if not tree_manifest.is_file() or tree_manifest.is_symlink():
+        raise RemoteError(f"code-server provision manifest is missing: {tree_manifest}")
+    digest = hashlib.sha256()
+    digest.update(b"code-server-tree\0")
+    digest.update(tree_manifest.read_bytes())
+    extensions = DATA / "extensions"
+    if extensions.exists() and (extensions.is_symlink() or not extensions.is_dir()):
+        raise RemoteError(f"extensions path has an unexpected type: {extensions}")
+    if extensions.is_dir():
+        for package in sorted(extensions.glob("*/package.json")):
+            if not package.is_file() or package.is_symlink():
+                raise RemoteError(f"extension manifest has an unexpected type: {package}")
+            digest.update(b"extension\0")
+            digest.update(str(package.relative_to(extensions)).encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(package.read_bytes())
+    return digest.hexdigest()
+
+
+def invalidate_extension_caches(user_data: Path, fingerprint: str) -> None:
+    inventory = user_data / ".envy-extension-inventory.json"
+    try:
+        current = load_json(inventory)
+    except (OSError, json.JSONDecodeError, RemoteError):
+        current = {}
+    expected = {"version": 1, "fingerprint": fingerprint}
+    if current == expected:
+        return
+    profiles = user_data / "CachedProfilesData"
+    if profiles.exists():
+        if profiles.is_symlink() or not profiles.is_dir():
+            raise RemoteError(f"extension cache path has an unexpected type: {profiles}")
+        for profile in profiles.iterdir():
+            if profile.is_symlink():
+                raise RemoteError(
+                    f"extension cache profile has an unexpected type: {profile}"
+                )
+            if not profile.is_dir():
+                continue
+            for name in ("extensions.builtin.cache", "extensions.user.cache"):
+                cache = profile / name
+                if cache.exists() or cache.is_symlink():
+                    if cache.is_dir() and not cache.is_symlink():
+                        raise RemoteError(
+                            f"extension cache has an unexpected type: {cache}"
+                        )
+                    cache.unlink()
+    user = user_data / "User"
+    if user.exists():
+        if user.is_symlink() or not user.is_dir():
+            raise RemoteError(f"extension cache path has an unexpected type: {user}")
+        for name in ("customBuiltinExtensionsCache.json", "systemExtensionsCache.json"):
+            cache = user / name
+            if cache.exists() or cache.is_symlink():
+                if cache.is_dir() and not cache.is_symlink():
+                    raise RemoteError(f"extension cache has an unexpected type: {cache}")
+                cache.unlink()
+    atomic_json(inventory, expected)
+
+
+def start_engine(restart_if_changed: bool = False) -> dict[str, Any]:
+    fingerprint = extension_fingerprint()
     current = engine()
     if current:
-        return current
+        if current.get("fingerprint") == fingerprint or not restart_if_changed:
+            return current
+        stop_engine()
     ENGINE_STATE.unlink(missing_ok=True)
     sock = socket_path()
     private_dir(sock.parent)
@@ -200,6 +267,7 @@ def start_engine() -> dict[str, Any]:
     private_dir(user_data)
     private_dir(extensions)
     private_dir(STATE)
+    invalidate_extension_caches(user_data, fingerprint)
     log_handle = LOG.open("ab", buffering=0)
     os.chmod(LOG, 0o600)
     environment = provision.external_environment()
@@ -247,7 +315,12 @@ def start_engine() -> dict[str, Any]:
             process.wait()
         _STARTED_PROCESSES.pop(process.pid, None)
         raise RemoteError(f"code-server did not create its socket; see {LOG}")
-    value = {"pid": process.pid, "identity": identity, "socket": str(sock)}
+    value = {
+        "pid": process.pid,
+        "identity": identity,
+        "socket": str(sock),
+        "fingerprint": fingerprint,
+    }
     atomic_json(ENGINE_STATE, value)
     return value
 
@@ -461,9 +534,9 @@ def lease(identifier: str) -> int:
         raise RemoteError(f"remote path is not a directory: {project}")
     lease_path = LEASES / f"{identifier}.json"
     with locked():
-        clean_stale_leases()
+        active = clean_stale_leases()
         STOP.unlink(missing_ok=True)
-        current = start_engine()
+        current = start_engine(restart_if_changed=not active)
         atomic_json(
             lease_path,
             {

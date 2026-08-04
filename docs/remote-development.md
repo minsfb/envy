@@ -228,6 +228,14 @@ extensions in version 1; users manage them through the editor. The feature must
 clearly document that some Microsoft extensions and native debuggers are
 unavailable or licensed only for official VS Code builds.
 
+The pinned code-server release advertises browser entrypoints for several Code
+OSS built-ins without including those files. Provisioning removes those exact
+manifest fields only when their reviewed values match, allowing the included
+Node entrypoints to load in the remote extension host on the first connection.
+The provisioned-tree ownership manifest records every correction. A missing or
+changed field fails closed during installation instead of silently rewriting a
+new artifact layout.
+
 ### Future native editor support
 
 Browser-first does not prevent a native client, but it also does not make one a
@@ -418,6 +426,10 @@ construct commands by concatenating user input.
    engine. The engine is detached from any one SSH channel but remains owned by
    its PID, version, socket, and lease records. Additional leases reuse the
    same recorded process and socket.
+   The engine record also fingerprints the provisioned tree and installed
+   extension manifests. A changed inventory clears only code-server's extension
+   discovery caches and restarts an idle stale engine. Active leases are never
+   interrupted; their engine is replaced after the normal final-lease shutdown.
 4. The engine listens on one private Unix socket with HTTP authentication
    disabled, telemetry and update checks disabled, Open VSX configured, and
    engine-specific Envy data directories.
