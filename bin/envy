@@ -832,6 +832,33 @@ cmd_secrets() {
   python3 "$ENVY_ROOT/features/secrets.py" "$@"
 }
 
+cmd_remote() {
+  local action="${1:-help}" internal=""
+  case "$action" in
+    help|--help|-h)
+      python3 "$ENVY_ROOT/lib/remote.py" --help
+      return
+      ;;
+    open|status|doctor)
+      python3 "$ENVY_ROOT/lib/remote.py" "$@"
+      return
+      ;;
+    _lease) internal=lease ;;
+    _status) internal=status ;;
+    _doctor) internal=doctor ;;
+    *) die "Unknown remote command: $action. Run 'envy remote --help'." ;;
+  esac
+  _ensure_installed || return $?
+  nv_feature_exists remote-development \
+    || die "This installation does not provide the remote-development feature"
+  nv_feature_in_scope remote-development \
+    || die "The remote-development feature is unavailable on this platform"
+  [[ "$(nv_state_feature_get remote-development enabled false 2>/dev/null || echo false)" == true ]] \
+    || die "The remote-development feature is not installed; run 'envy install --reconfigure' and enable it first"
+  shift
+  python3 "$ENVY_ROOT/features/remote-development.py" "$internal" "$@"
+}
+
 cmd_help() {
   cat <<'USAGE'
 envy - portable developer environment manager
@@ -847,6 +874,8 @@ Commands:
   status [--json]
   verify [--only/-o FEATURES | --except/-e FEATURES] [--json]
   doctor [all|features|network|shell|state|FEATURE...] [--verbose] [--json]
+  remote open HOST [PATH] [--no-browser] [--local-port PORT]
+  remote {status|doctor} HOST
   secrets {push-key|pull-key} HOST [--force] [--yes] [--restore]
   uninstall [--only/-o FEATURES | --except/-e FEATURES] [--purge] [--yes] [--dry-run]
 
@@ -869,6 +898,7 @@ main() {
     status) cmd_status "$@" ;;
     verify) cmd_verify "$@" ;;
     doctor) cmd_doctor "$@" ;;
+    remote) cmd_remote "$@" ;;
     secrets) cmd_secrets "$@" ;;
     uninstall) cmd_uninstall "$@" ;;
     generate-env) _ensure_installed && cmd_generate_env ;;

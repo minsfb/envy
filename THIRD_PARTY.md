@@ -10,10 +10,15 @@ the upstream artifact recorded in `dependencies.json` and refusing to proceed
 unless its SHA-256 digest matches. Nothing is redistributed: the download comes
 from the upstream project, and an artifact with no recorded digest fails closed.
 
+The optional remote-development feature similarly downloads a verified
+standalone `code-server` release tree into Envy-owned data. It is not placed on
+`PATH`, and no installer script or mutable package source is used.
+
 | Project | Version | License |
 | --- | --- | --- |
 | Chezmoi | `2.71.1` | MIT |
 | Mise | `2026.7.11` | MIT |
+| code-server | `4.131.0` | MIT |
 
 The locked Mise toolchain installs these secrets tools without vendoring them:
 

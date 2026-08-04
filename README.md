@@ -94,6 +94,7 @@ register as drift and converge on a plain `envy upgrade`.
 | `agent-assets` | recommended | Common QA/workflow assets plus manifest-selected bundle assets with ownership tracking |
 | `adb` | optional | Select an existing Android SDK without downloading it |
 | `secrets` | optional | Manage SOPS+age recovery, plaintext restoration, and identity transfer over SSH |
+| `remote-development` | optional | Run a shared browser editor on a Linux/WSL host through OpenSSH |
 
 ### Shell fragments
 
@@ -134,6 +135,36 @@ python3 lib/provision.py record chezmoi
 python3 lib/provision.py record mise
 python3 lib/provision.py can-install chezmoi
 ```
+
+### Remote development
+
+Enable `remote-development` during `envy install --reconfigure` on a Linux or
+WSL host, then connect from macOS, Linux, or WSL with the system OpenSSH client:
+
+```bash
+envy remote open user@host /path/to/project
+envy remote status user@host
+envy remote doctor user@host
+```
+
+The command prints a loopback URL, opens it in the default browser, and stays in
+the foreground to own the SSH lease. Use `--no-browser` for PWA or manual
+workflows and `--local-port PORT` when a stable local port is needed. No remote
+TCP port is exposed: the pinned `code-server` process listens on a private Unix
+socket and is reachable only through the SSH control connection.
+
+One editor process is shared by all leases for the remote Unix user. The final
+lease starts a 300-second shutdown grace period; a reconnect cancels it. Base
+Envy uses Open VSX and installs no extensions. A trusted bundle can replace all
+three registry endpoints and the grace period through
+`settings.remote_development.extension_registry` and
+`idle_grace_seconds` (0–3600). User editor data, interactively installed
+extensions, and source trees survive both ordinary removal and purge.
+
+The browser client is the v1 adapter. Its session and engine boundary leaves
+room for a future native client, but a VS Code-style native client will require
+a compatible remote extension host and protocol negotiation rather than simply
+reusing the browser engine. See [the design and security model](docs/remote-development.md).
 
 ### Smart merge and managed files
 

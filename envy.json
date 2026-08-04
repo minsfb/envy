@@ -139,6 +139,16 @@
       "verify": {"run": "features/secrets.py", "args": ["verify"]},
       "doctor": {"run": "features/secrets.py", "args": ["doctor"]},
       "remove": {"run": "features/secrets.py", "args": ["remove"]}
+    },
+    "remote-development": {
+      "description": "Shared browser-based development server over SSH",
+      "tier": "optional",
+      "default_enabled": false,
+      "scope": {"linux": true, "wsl": true},
+      "converge": {"run": "features/remote-development.py", "args": ["converge"]},
+      "verify": {"run": "features/remote-development.py", "args": ["verify"]},
+      "doctor": {"run": "features/remote-development.py", "args": ["doctor"]},
+      "remove": {"run": "features/remote-development.py", "args": ["remove"]}
     }
   }
 }

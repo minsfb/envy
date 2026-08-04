@@ -43,7 +43,9 @@ def provisioned(root: Path) -> list[dict[str, Any]]:
     return [
         item
         for item in value.get("dependencies", [])
-        if isinstance(item, dict) and isinstance(item.get("provision"), dict)
+        if isinstance(item, dict)
+        and isinstance(item.get("provision"), dict)
+        and not item["provision"].get("owner_feature")
     ]
 
 
@@ -51,6 +53,14 @@ def verify_binary(item: dict[str, Any], converge: bool) -> None:
     """Hold envy-owned binaries to the pin; only warn about foreign ones."""
     name = item["name"]
     expected = item["version"]
+    if provision.is_tree(item) and provision.marker(name).is_file():
+        try:
+            provision.verify_tree(item)
+        except provision.ProvisionError:
+            if not converge:
+                raise
+            if provision.install(name, force=True) != 0:
+                raise DependencyError(f"could not restore managed tree for {name}")
     actual = provision.installed_version(item)
     if actual is None:
         # Absent tools are reported by the owning feature's pkg_ensure.
@@ -129,7 +139,12 @@ def main() -> int:
         for item in provisioned(root):
             verify_binary(item, converge=action == "converge")
         return 0
-    except (DependencyError, provision.ProvisionError, OSError, json.JSONDecodeError) as error:
+    except (
+        DependencyError,
+        provision.ProvisionError,
+        OSError,
+        json.JSONDecodeError,
+    ) as error:
         print(f"envy dependencies: {error}", file=sys.stderr)
         return 1
 

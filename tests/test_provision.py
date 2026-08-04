@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
@@ -27,9 +28,13 @@ class ProvisionTest(unittest.TestCase):
         self.bin = self.base / "bin"
         self.previous = {
             "XDG_STATE_HOME": os.environ.get("XDG_STATE_HOME"),
+            "XDG_DATA_HOME": os.environ.get("XDG_DATA_HOME"),
             "ENVY_BIN_HOME": os.environ.get("ENVY_BIN_HOME"),
+            "ENVY_NETWORK_PROXY": os.environ.get("ENVY_NETWORK_PROXY"),
+            **{key: os.environ.get(key) for key in provision.PROXY_VARIABLES},
         }
         os.environ["XDG_STATE_HOME"] = str(self.state)
+        os.environ["XDG_DATA_HOME"] = str(self.base / "data")
         os.environ["ENVY_BIN_HOME"] = str(self.bin)
         self.root = self.base / "repo"
         self.root.mkdir()
@@ -80,9 +85,71 @@ class ProvisionTest(unittest.TestCase):
             json.dumps(document, indent=2), encoding="utf-8"
         )
 
+    def tree_archive(self, escaping_symlink: bool = False) -> Path:
+        path = self.base / "fixturetree.tar.gz"
+        with tarfile.open(path, "w:gz") as bundle:
+            executable = tarfile.TarInfo("fixturetree/bin/fixturetool")
+            content = (
+                b'#!/bin/sh\necho "[timestamp 41.601] info"\necho "1.2.3 fixturetree"\n'
+            )
+            executable.size = len(content)
+            executable.mode = 0o755
+            bundle.addfile(executable, io.BytesIO(content))
+            link = tarfile.TarInfo("fixturetree/bin/fixture-link")
+            link.type = tarfile.SYMTYPE
+            link.linkname = "../../escape" if escaping_symlink else "fixturetool"
+            bundle.addfile(link)
+        return path
+
+    def write_tree_manifest(self, archive: Path) -> None:
+        document = {
+            "version": 1,
+            "dependencies": [
+                {
+                    "name": "fixturetool",
+                    "version": "1.2.3",
+                    "license": "MIT",
+                    "provision": {
+                        "kind": "tree",
+                        "command": "fixturetool",
+                        "executable": "bin/fixturetool",
+                        "install_path": "${ENVY_DATA_DIR}/tools/fixturetool/1.2.3",
+                        "version_pattern": "(?m)^(\\d+(?:\\.\\d+)+)\\b",
+                        "artifacts": {
+                            provision.platform_key(): {
+                                "url": archive.as_uri(),
+                                "strip_components": 1,
+                                "sha256": provision.digest_of(archive),
+                            }
+                        },
+                    },
+                }
+            ],
+        }
+        (self.root / "dependencies.json").write_text(
+            json.dumps(document, indent=2), encoding="utf-8"
+        )
+
     def test_platform_key_normalizes_architecture(self) -> None:
         key = provision.platform_key()
         self.assertRegex(key, r"^(linux|darwin|windows)-")
+
+    def test_envy_network_proxy_fills_standard_proxy_environment(self) -> None:
+        for key in provision.PROXY_VARIABLES:
+            os.environ.pop(key, None)
+        os.environ["ENVY_NETWORK_PROXY"] = "http://proxy.example:8080"
+        environment = provision.external_environment()
+        for key in provision.PROXY_VARIABLES:
+            self.assertEqual(environment[key], "http://proxy.example:8080")
+
+    def test_explicit_proxy_environment_takes_precedence(self) -> None:
+        for key in provision.PROXY_VARIABLES:
+            os.environ.pop(key, None)
+        os.environ["ENVY_NETWORK_PROXY"] = "http://fallback.example:8080"
+        os.environ["HTTPS_PROXY"] = "http://explicit.example:8080"
+        environment = provision.external_environment()
+        self.assertEqual(environment["HTTPS_PROXY"], "http://explicit.example:8080")
+        self.assertNotIn("HTTP_PROXY", environment)
 
     def test_missing_digest_refuses_to_install(self) -> None:
         archive = self.archive("1.2.3")
@@ -151,6 +218,35 @@ class ProvisionTest(unittest.TestCase):
         archive = self.archive("9.9.9")
         self.write_manifest(archive.as_uri(), provision.digest_of(archive))
         self.assertEqual(provision.install("fixturetool"), 1)
+
+    def test_verified_tree_installs_symlinks_and_detects_drift(self) -> None:
+        archive = self.tree_archive()
+        self.write_tree_manifest(archive)
+        self.assertEqual(provision.install("fixturetool"), 0)
+        item = provision.dependency("fixturetool")
+        target = provision.install_path(item)
+        self.assertEqual(os.readlink(target / "bin" / "fixture-link"), "fixturetool")
+        provision.verify_tree(item)
+        (target / "unexpected").write_text("drift", encoding="utf-8")
+        with self.assertRaises(provision.ProvisionError):
+            provision.verify_tree(item)
+
+    def test_tree_rejects_escaping_symlink(self) -> None:
+        archive = self.tree_archive(escaping_symlink=True)
+        self.write_tree_manifest(archive)
+        with self.assertRaises(provision.ProvisionError):
+            provision.install("fixturetool")
+        self.assertFalse(
+            provision.install_path(provision.dependency("fixturetool")).exists()
+        )
+
+    def test_owned_tree_can_be_removed(self) -> None:
+        archive = self.tree_archive()
+        self.write_tree_manifest(archive)
+        self.assertEqual(provision.install("fixturetool"), 0)
+        target = provision.install_path(provision.dependency("fixturetool"))
+        self.assertEqual(provision.remove("fixturetool"), 0)
+        self.assertFalse(target.exists())
 
 
 class PinEnforcementTest(unittest.TestCase):
