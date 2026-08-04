@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Attach an integrated terminal to its workspace-scoped tmux session."""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+import shutil
+import sys
+from pathlib import Path
+
+
+PREFIX = "envy-rd-"
+
+
+class TerminalError(RuntimeError):
+    pass
+
+
+def resolve_workspace(raw: str | None) -> Path:
+    value = raw
+    if not value or (value.startswith("${") and value.endswith("}")):
+        value = os.getcwd()
+    if "\0" in value:
+        raise TerminalError("workspace path contains a null byte")
+    try:
+        workspace = Path(value).expanduser().resolve(strict=True)
+    except OSError as error:
+        raise TerminalError(f"cannot resolve workspace: {value}") from error
+    if not workspace.is_dir():
+        raise TerminalError(f"workspace is not a directory: {workspace}")
+    return workspace
+
+
+def session_name(workspace: Path) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", workspace.name.lower()).strip("-")
+    slug = (slug or "workspace")[:24]
+    digest = hashlib.sha256(os.fsencode(str(workspace))).hexdigest()[:12]
+    return f"{PREFIX}{slug}-{digest}"
+
+
+def tmux_command(workspace: Path, executable: str | None = None) -> list[str]:
+    command = executable or shutil.which("tmux")
+    if not command:
+        raise TerminalError("tmux is unavailable; reconverge the terminal feature")
+    return [
+        command,
+        "new-session",
+        "-A",
+        "-s",
+        session_name(workspace),
+        "-c",
+        str(workspace),
+    ]
+
+
+def main() -> int:
+    if len(sys.argv) > 2:
+        print("usage: nv-remote-terminal [WORKSPACE]", file=sys.stderr)
+        return 2
+    try:
+        workspace = resolve_workspace(sys.argv[1] if len(sys.argv) == 2 else None)
+        command = tmux_command(workspace)
+        os.execv(command[0], command)
+    except TerminalError as error:
+        print(f"nv-remote-terminal: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

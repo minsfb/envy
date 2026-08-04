@@ -95,6 +95,7 @@ register as drift and converge on a plain `envy upgrade`.
 | `adb` | optional | Select an existing Android SDK without downloading it |
 | `secrets` | optional | Manage SOPS+age recovery, plaintext restoration, and identity transfer over SSH |
 | `remote-development` | optional | Run a shared browser editor on a Linux/WSL host through OpenSSH |
+| `remote-development-tmux` | optional | Add workspace-scoped persistent tmux terminals to the remote editor |
 
 ### Shell fragments
 
@@ -167,6 +168,12 @@ The browser client is the v1 adapter. Its session and engine boundary leaves
 room for a future native client, but a VS Code-style native client will require
 a compatible remote extension host and protocol negotiation rather than simply
 reusing the browser engine. See [the design and security model](docs/remote-development.md).
+
+Enable the separate `remote-development-tmux` feature for durable interactive
+terminals. It depends on `tmux-persistence` and `remote-development`, adds an
+`Envy Remote (tmux)` terminal profile, and uses a bounded workspace-derived
+session name. Envy leaves existing tmux sessions running when the profile or
+editor server is removed.
 
 ### Smart merge and managed files
 

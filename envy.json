@@ -149,6 +149,17 @@
       "verify": {"run": "features/remote-development.py", "args": ["verify"]},
       "doctor": {"run": "features/remote-development.py", "args": ["doctor"]},
       "remove": {"run": "features/remote-development.py", "args": ["remove"]}
+    },
+    "remote-development-tmux": {
+      "description": "Workspace-scoped persistent tmux terminals in the remote editor",
+      "tier": "optional",
+      "default_enabled": false,
+      "scope": {"linux": true, "wsl": true},
+      "depends_on": ["tmux-persistence", "remote-development"],
+      "converge": {"run": "features/remote-development-tmux.py", "args": ["converge"]},
+      "verify": {"run": "features/remote-development-tmux.py", "args": ["verify"]},
+      "doctor": {"run": "features/remote-development-tmux.py", "args": ["doctor"]},
+      "remove": {"run": "features/remote-development-tmux.py", "args": ["remove"]}
     }
   }
 }

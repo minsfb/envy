@@ -202,6 +202,24 @@ nv_manifest_cleanup
             self.assertEqual(migrated["features"]["smart-merge"]["status"], "pending")
             self.assertEqual(migrated["features"]["smart-merge"]["tier"], "core")
 
+    def test_remote_tmux_is_optional_and_depends_on_both_features(self) -> None:
+        composed = manifest_module.compose(ROOT / "envy.json", [])
+        features = composed["features"]
+        names = list(features)
+        definition = features["remote-development-tmux"]
+        self.assertEqual(definition["tier"], "optional")
+        self.assertFalse(definition["default_enabled"])
+        self.assertEqual(
+            definition["depends_on"],
+            ["tmux-persistence", "remote-development"],
+        )
+        self.assertLess(
+            names.index("tmux-persistence"), names.index("remote-development-tmux")
+        )
+        self.assertLess(
+            names.index("remote-development"), names.index("remote-development-tmux")
+        )
+
     def test_v2_alias_and_detached_feature_return(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

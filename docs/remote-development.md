@@ -290,11 +290,13 @@ make SSH-lease shutdown ambiguous, invite Resurrect to restart stale engine
 versions, and turn an optional terminal tool into part of the security
 boundary.
 
-Tmux is still useful for durable integrated terminals. In a post-v1 release,
-when `tmux-persistence` is enabled on the remote host, Envy may contribute an
-optional integrated-terminal profile named `Envy tmux`. A small
-`nv-remote-terminal` helper would attach to a workspace-scoped tmux session;
-ordinary integrated terminals remain the default. This gives users persistent
+Tmux is still useful for durable integrated terminals. The separate optional
+`remote-development-tmux` feature depends on both `tmux-persistence` and
+`remote-development` and contributes an integrated-terminal profile named
+`Envy Remote (tmux)`. A small feature-owned local extension contributes the
+profile as a configuration default, so any user setting remains authoritative
+and its JSON-with-comments file is never rewritten. The `nv-remote-terminal`
+helper attaches to a workspace-scoped tmux session. This gives users persistent
 shells and the existing agent-session metadata without coupling the editor
 process to tmux.
 
@@ -303,6 +305,10 @@ not a raw path. Opening the profile attaches one terminal to the tmux UI; users
 create further panes and windows inside tmux. Envy must not automatically
 restore an SSH tunnel, open a browser, or reconnect a remote editor during
 tmux-resurrect startup.
+
+Removing the feature deletes only its unchanged Envy-owned local extension; it
+never modifies user settings or kills workspace tmux sessions. A modified
+extension directory is treated as user-owned and retained.
 
 `envy remote open` may itself run in a local tmux pane, but local Resurrect must
 not relaunch it automatically because reconnection can prompt for credentials
