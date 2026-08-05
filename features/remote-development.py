@@ -465,49 +465,138 @@ def converge() -> int:
     return 0
 
 
-def verify(verbose: bool = False) -> int:
-    problems: list[str] = []
+def verification_diagnostics() -> list[tuple[str, bool]]:
+    diagnostics: list[tuple[str, bool]] = []
+    configured: tuple[int, dict[str, str]] | None = None
     try:
-        grace, registry = settings()
-        if provision.verify(DEPENDENCY) != 0:
-            problems.append("code-server does not match its pinned version")
-        version_root = provision.install_path(provision.dependency(DEPENDENCY))
-        current_link = version_root.parent / "current"
-        if (
-            not current_link.is_symlink()
-            or os.readlink(current_link) != version_root.name
-        ):
-            problems.append(f"selected engine link is stale: {current_link}")
-        if load_json(MARKER) != {
-            "version": 1,
-            "idle_grace_seconds": grace,
-            "extension_registry": registry,
-        }:
-            problems.append(f"feature marker is stale: {MARKER}")
-        if STATE.is_symlink() or stat.S_IMODE(STATE.stat().st_mode) != 0o700:
-            problems.append(f"feature state directory is not private: {STATE}")
-        if stat.S_IMODE(MARKER.stat().st_mode) != 0o600:
-            problems.append(f"feature marker is not private: {MARKER}")
-        runtime = runtime_dir()
-        if runtime.exists() and (
-            runtime.is_symlink() or stat.S_IMODE(runtime.stat().st_mode) != 0o700
-        ):
-            problems.append(f"runtime directory is not private: {runtime}")
-        sock = socket_path()
-        if sock.exists() and (
-            not sock.is_socket() or stat.S_IMODE(sock.stat().st_mode) != 0o600
-        ):
-            problems.append(f"engine socket is not private: {sock}")
+        configured = settings()
     except (
         RemoteError,
-        provision.ProvisionError,
         OSError,
         json.JSONDecodeError,
+        ValueError,
     ) as error:
-        problems.append(str(error))
-    if problems:
+        diagnostics.append((str(error), False))
+
+    try:
+        if provision.verify(DEPENDENCY) != 0:
+            diagnostics.append(
+                ("code-server does not match its pinned version", True)
+            )
+    except provision.ProvisionError as error:
+        diagnostics.append((str(error), True))
+    except (OSError, json.JSONDecodeError, ValueError, KeyError, TypeError) as error:
+        diagnostics.append((str(error), False))
+
+    try:
+        version_root = provision.install_path(provision.dependency(DEPENDENCY))
+        current_link = version_root.parent / "current"
+        if current_link.is_symlink():
+            if os.readlink(current_link) != version_root.name:
+                diagnostics.append(
+                    (f"selected engine link is stale: {current_link}", True)
+                )
+        elif current_link.exists():
+            diagnostics.append(
+                (f"selected engine link has an unexpected type: {current_link}", False)
+            )
+        else:
+            diagnostics.append((f"selected engine link is stale: {current_link}", True))
+    except (provision.ProvisionError, OSError, json.JSONDecodeError, ValueError) as error:
+        diagnostics.append((str(error), False))
+
+    state_blocks_converge = False
+    try:
+        if STATE.is_symlink() or (STATE.exists() and not STATE.is_dir()):
+            diagnostics.append(
+                (f"feature state directory has an unexpected type: {STATE}", False)
+            )
+            state_blocks_converge = True
+        elif not STATE.exists():
+            diagnostics.append((f"feature state directory is missing: {STATE}", True))
+        elif stat.S_IMODE(STATE.stat().st_mode) != 0o700:
+            diagnostics.append(
+                (f"feature state directory is not private: {STATE}", True)
+            )
+    except OSError as error:
+        diagnostics.append((f"cannot inspect feature state directory: {error}", False))
+        state_blocks_converge = True
+
+    if not state_blocks_converge:
+        try:
+            if not MARKER.exists() and not MARKER.is_symlink():
+                diagnostics.append((f"feature marker is missing: {MARKER}", True))
+            elif MARKER.is_symlink():
+                diagnostics.append((f"feature marker is not private: {MARKER}", True))
+            elif MARKER.is_dir():
+                diagnostics.append(
+                    (f"feature marker has an unexpected type: {MARKER}", False)
+                )
+            else:
+                if configured is not None:
+                    grace, registry = configured
+                    try:
+                        marker_value = load_json(MARKER)
+                    except (OSError, json.JSONDecodeError, RemoteError) as error:
+                        diagnostics.append(
+                            (f"feature marker cannot be read: {error}", True)
+                        )
+                    else:
+                        if marker_value != {
+                            "version": 1,
+                            "idle_grace_seconds": grace,
+                            "extension_registry": registry,
+                        }:
+                            diagnostics.append(
+                                (f"feature marker is stale: {MARKER}", True)
+                            )
+                if stat.S_IMODE(MARKER.stat().st_mode) != 0o600:
+                    diagnostics.append(
+                        (f"feature marker is not private: {MARKER}", True)
+                    )
+        except OSError as error:
+            diagnostics.append((f"cannot inspect feature marker: {error}", False))
+
+    runtime = runtime_dir()
+    inspect_runtime = not state_blocks_converge or bool(
+        os.environ.get("XDG_RUNTIME_DIR")
+    )
+    if inspect_runtime:
+        try:
+            if runtime.exists() or runtime.is_symlink():
+                if (
+                    runtime.is_symlink()
+                    or not runtime.is_dir()
+                    or stat.S_IMODE(runtime.stat().st_mode) != 0o700
+                ):
+                    diagnostics.append(
+                        (f"runtime directory is not private: {runtime}", False)
+                    )
+        except OSError as error:
+            diagnostics.append((f"cannot inspect runtime directory: {error}", False))
+    sock = socket_path()
+    if inspect_runtime:
+        try:
+            if sock.exists() or sock.is_symlink():
+                if (
+                    sock.is_symlink()
+                    or not sock.is_socket()
+                    or stat.S_IMODE(sock.stat().st_mode) != 0o600
+                ):
+                    diagnostics.append(
+                        (f"engine socket is not private: {sock}", False)
+                    )
+        except OSError as error:
+            diagnostics.append((f"cannot inspect engine socket: {error}", False))
+    return diagnostics
+
+
+def report_verification(
+    diagnostics: list[tuple[str, bool]], verbose: bool = False
+) -> int:
+    if diagnostics:
         if verbose:
-            for problem in problems:
+            for problem, _repairable in diagnostics:
                 print(f"  FAIL {problem}")
         return 1
     if verbose:
@@ -519,8 +608,13 @@ def verify(verbose: bool = False) -> int:
     return 0
 
 
+def verify(verbose: bool = False) -> int:
+    return report_verification(verification_diagnostics(), verbose=verbose)
+
+
 def doctor(verbose: bool = False) -> int:
-    result = verify(verbose=True)
+    diagnostics = verification_diagnostics()
+    result = report_verification(diagnostics, verbose=True)
     stale: list[str] = []
     if LEASES.is_dir():
         for path in LEASES.glob("*.json"):
@@ -540,8 +634,11 @@ def doctor(verbose: bool = False) -> int:
         print(
             f"  WARN {len(stale)} stale lease record(s); the next open or convergence will clean them"
         )
-    if result != 0:
-        print("  REPAIR run envy upgrade --only remote-development --force")
+    if any(repairable for _problem, repairable in diagnostics):
+        print(
+            "  REPAIR managed drift: run "
+            "envy upgrade --only remote-development --force"
+        )
     if verbose:
         try:
             item = provision.dependency(DEPENDENCY)

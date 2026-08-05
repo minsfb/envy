@@ -116,6 +116,28 @@ class RemoteProvisionLaunchTest(unittest.TestCase):
         }
         return item, marker, resource
 
+    def healthy_verification_state(self) -> tuple[dict[str, object], Path]:
+        version_root = self.base / "managed" / "code-server" / "1.2.3"
+        version_root.mkdir(parents=True)
+        (version_root.parent / "current").symlink_to(version_root.name)
+        self.feature.STATE.mkdir(parents=True, mode=0o700)
+        self.feature.STATE.chmod(0o700)
+        grace, registry = self.feature.settings()
+        self.feature.MARKER.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "idle_grace_seconds": grace,
+                    "extension_registry": registry,
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.feature.MARKER.chmod(0o600)
+        return {"version": "1.2.3"}, version_root
+
     def test_tree_drift_blocks_new_engine_even_when_executable_reports_pin(self) -> None:
         item, marker, resource = self.provisioned_tree()
         command = self.feature.provision.managed_command(item)
@@ -392,7 +414,9 @@ class RemoteProvisionLaunchTest(unittest.TestCase):
         provision_root = self.base / "code-server" / "1.2.3"
         usage = mock.Mock(free=1024 * 1024)
         with (
-            mock.patch.object(self.feature, "verify", return_value=0),
+            mock.patch.object(
+                self.feature, "verification_diagnostics", return_value=[]
+            ),
             mock.patch.object(self.feature.shutil, "disk_usage", return_value=usage),
             mock.patch.object(
                 self.feature.provision, "dependency", return_value=item
@@ -418,7 +442,13 @@ class RemoteProvisionLaunchTest(unittest.TestCase):
         sentinel.write_bytes(b"preserve\n")
         usage = mock.Mock(free=1024 * 1024)
         with (
-            mock.patch.object(self.feature, "verify", return_value=1),
+            mock.patch.object(
+                self.feature,
+                "verification_diagnostics",
+                return_value=[
+                    ("code-server does not match its pinned version", True)
+                ],
+            ),
             mock.patch.object(self.feature.shutil, "disk_usage", return_value=usage),
         ):
             output = io.StringIO()
@@ -429,11 +459,19 @@ class RemoteProvisionLaunchTest(unittest.TestCase):
         )
         self.assertEqual(sentinel.read_bytes(), b"preserve\n")
 
-    def test_verbose_doctor_keeps_original_failure_when_dependency_is_malformed(self) -> None:
+    def test_doctor_does_not_offer_upgrade_for_nonrepairable_failures(self) -> None:
         usage = mock.Mock(free=1024 * 1024)
         malformed = json.JSONDecodeError("bad manifest", "{", 1)
         with (
-            mock.patch.object(self.feature, "verify", return_value=1),
+            mock.patch.object(
+                self.feature,
+                "verification_diagnostics",
+                return_value=[
+                    ("remote idle_grace_seconds must be an integer", False),
+                    ("runtime directory is not private: /runtime", False),
+                    ("engine socket is not private: /runtime/socket", False),
+                ],
+            ),
             mock.patch.object(self.feature.shutil, "disk_usage", return_value=usage),
             mock.patch.object(
                 self.feature.provision, "dependency", side_effect=malformed
@@ -442,8 +480,104 @@ class RemoteProvisionLaunchTest(unittest.TestCase):
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 self.assertEqual(self.feature.doctor(verbose=True), 1)
-        self.assertIn("REPAIR run envy upgrade", output.getvalue())
+        self.assertNotIn("envy upgrade", output.getvalue())
+        self.assertIn("remote idle_grace_seconds", output.getvalue())
+        self.assertIn("runtime directory is not private", output.getvalue())
+        self.assertIn("engine socket is not private", output.getvalue())
         self.assertIn("provision paths unavailable", output.getvalue())
+
+    def test_current_regular_file_is_not_classified_as_upgrade_repairable(self) -> None:
+        item, version_root = self.healthy_verification_state()
+        current = version_root.parent / "current"
+        current.unlink()
+        current.write_text("unmanaged\n", encoding="utf-8")
+        with (
+            mock.patch.object(self.feature.provision, "verify", return_value=0),
+            mock.patch.object(
+                self.feature.provision, "dependency", return_value=item
+            ),
+            mock.patch.object(
+                self.feature.provision, "install_path", return_value=version_root
+            ),
+        ):
+            diagnostics = self.feature.verification_diagnostics()
+        self.assertIn(
+            (f"selected engine link has an unexpected type: {current}", False),
+            diagnostics,
+        )
+        self.assertFalse(any(repairable for _problem, repairable in diagnostics))
+
+    def test_marker_directory_and_runtime_drift_are_not_upgrade_repairable(self) -> None:
+        item, version_root = self.healthy_verification_state()
+        self.feature.MARKER.unlink()
+        self.feature.MARKER.mkdir()
+        runtime = self.feature.runtime_dir()
+        runtime.mkdir(parents=True, mode=0o755)
+        runtime.chmod(0o755)
+        with (
+            mock.patch.object(self.feature.provision, "verify", return_value=0),
+            mock.patch.object(
+                self.feature.provision, "dependency", return_value=item
+            ),
+            mock.patch.object(
+                self.feature.provision, "install_path", return_value=version_root
+            ),
+        ):
+            diagnostics = self.feature.verification_diagnostics()
+        self.assertIn(
+            (f"feature marker has an unexpected type: {self.feature.MARKER}", False),
+            diagnostics,
+        )
+        self.assertIn(
+            (f"runtime directory is not private: {runtime}", False), diagnostics
+        )
+        self.assertFalse(any(repairable for _problem, repairable in diagnostics))
+
+    def test_dangling_marker_symlink_is_repairable_without_stat_failure(self) -> None:
+        item, version_root = self.healthy_verification_state()
+        self.feature.MARKER.unlink()
+        self.feature.MARKER.symlink_to(self.base / "missing-marker-target")
+        with (
+            mock.patch.object(self.feature.provision, "verify", return_value=0),
+            mock.patch.object(
+                self.feature.provision, "dependency", return_value=item
+            ),
+            mock.patch.object(
+                self.feature.provision, "install_path", return_value=version_root
+            ),
+        ):
+            diagnostics = self.feature.verification_diagnostics()
+        self.assertEqual(
+            diagnostics,
+            [(f"feature marker is not private: {self.feature.MARKER}", True)],
+        )
+
+    def test_state_symlink_does_not_trigger_nested_upgrade_repairs(self) -> None:
+        item, version_root = self.healthy_verification_state()
+        self.feature.shutil.rmtree(self.feature.STATE)
+        outside = self.base / "outside-state"
+        outside.mkdir()
+        self.feature.STATE.symlink_to(outside, target_is_directory=True)
+        with (
+            mock.patch.object(self.feature.provision, "verify", return_value=0),
+            mock.patch.object(
+                self.feature.provision, "dependency", return_value=item
+            ),
+            mock.patch.object(
+                self.feature.provision, "install_path", return_value=version_root
+            ),
+        ):
+            diagnostics = self.feature.verification_diagnostics()
+        self.assertEqual(
+            diagnostics,
+            [
+                (
+                    f"feature state directory has an unexpected type: "
+                    f"{self.feature.STATE}",
+                    False,
+                )
+            ],
+        )
 
     def test_doctor_cli_accepts_only_optional_verbose_flag(self) -> None:
         with mock.patch.object(self.feature, "doctor", return_value=0) as doctor:
