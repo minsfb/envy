@@ -179,14 +179,41 @@ def clean_stale_leases() -> list[Path]:
     return active
 
 
+def active_leases() -> list[Path]:
+    if not LEASES.exists() and not LEASES.is_symlink():
+        return []
+    if LEASES.is_symlink() or not LEASES.is_dir():
+        raise RemoteError(f"lease path has an unexpected type: {LEASES}")
+    active: list[Path] = []
+    for path in LEASES.glob("*.json"):
+        try:
+            value = load_json(path)
+        except (OSError, json.JSONDecodeError, RemoteError):
+            continue
+        if live(value.get("pid"), value.get("identity")):
+            active.append(path)
+    return active
+
+
 def extension_fingerprint() -> str:
     item = provision.dependency(DEPENDENCY)
     tree_manifest = provision.install_path(item) / provision.TREE_MANIFEST
-    if not tree_manifest.is_file() or tree_manifest.is_symlink():
-        raise RemoteError(f"code-server provision manifest is missing: {tree_manifest}")
+    try:
+        valid_manifest = tree_manifest.is_file() and not tree_manifest.is_symlink()
+        manifest_bytes = tree_manifest.read_bytes() if valid_manifest else None
+    except OSError as error:
+        raise RemoteError(
+            f"cannot read code-server provision manifest {tree_manifest}: {error}; "
+            "run envy upgrade --only remote-development --force"
+        ) from error
+    if manifest_bytes is None:
+        raise RemoteError(
+            f"code-server provision manifest is missing: {tree_manifest}; "
+            "run envy upgrade --only remote-development --force"
+        )
     digest = hashlib.sha256()
     digest.update(b"code-server-tree\0")
-    digest.update(tree_manifest.read_bytes())
+    digest.update(manifest_bytes)
     extensions = DATA / "extensions"
     if extensions.exists() and (extensions.is_symlink() or not extensions.is_dir()):
         raise RemoteError(f"extensions path has an unexpected type: {extensions}")
@@ -242,24 +269,57 @@ def invalidate_extension_caches(user_data: Path, fingerprint: str) -> None:
     atomic_json(inventory, expected)
 
 
+def verified_engine_dependency() -> dict[str, Any]:
+    try:
+        item = provision.dependency(DEPENDENCY)
+        result = provision.verify(DEPENDENCY)
+    except (provision.ProvisionError, OSError) as error:
+        raise RemoteError(
+            f"code-server provision verification failed: {error}; "
+            "run envy upgrade --only remote-development --force"
+        ) from error
+    if result != 0:
+        raise RemoteError(
+            "code-server provision verification failed; run "
+            "envy upgrade --only remote-development --force"
+        )
+    return item
+
+
+def launch_fingerprint() -> str:
+    try:
+        return extension_fingerprint()
+    except provision.ProvisionError as error:
+        raise RemoteError(
+            f"code-server provision verification failed: {error}; "
+            "run envy upgrade --only remote-development --force"
+        ) from error
+
+
 def start_engine(restart_if_changed: bool = False) -> dict[str, Any]:
-    fingerprint = extension_fingerprint()
     current = engine()
     if current:
-        if current.get("fingerprint") == fingerprint or not restart_if_changed:
+        if not restart_if_changed:
             return current
+        fingerprint = launch_fingerprint()
+        if current.get("fingerprint") == fingerprint:
+            return current
+    else:
+        fingerprint = launch_fingerprint()
+    item = verified_engine_dependency()
+    command = provision.managed_command(item)
+    if command is None or not os.access(command, os.X_OK):
+        raise RemoteError(
+            "code-server is not provisioned; run "
+            "envy upgrade --only remote-development --force"
+        )
+    _grace, registry = settings()
+    if current:
         stop_engine()
     ENGINE_STATE.unlink(missing_ok=True)
     sock = socket_path()
     private_dir(sock.parent)
     sock.unlink(missing_ok=True)
-    item = provision.dependency(DEPENDENCY)
-    command = provision.managed_command(item)
-    if command is None or not os.access(command, os.X_OK):
-        raise RemoteError(
-            "code-server is not provisioned; run envy upgrade --only remote-development"
-        )
-    _grace, registry = settings()
     user_data = DATA / "user-data" / "code-server"
     extensions = DATA / "extensions"
     private_dir(DATA)
@@ -459,7 +519,7 @@ def verify(verbose: bool = False) -> int:
     return 0
 
 
-def doctor() -> int:
+def doctor(verbose: bool = False) -> int:
     result = verify(verbose=True)
     stale: list[str] = []
     if LEASES.is_dir():
@@ -480,6 +540,27 @@ def doctor() -> int:
         print(
             f"  WARN {len(stale)} stale lease record(s); the next open or convergence will clean them"
         )
+    if result != 0:
+        print("  REPAIR run envy upgrade --only remote-development --force")
+    if verbose:
+        try:
+            item = provision.dependency(DEPENDENCY)
+            version_root = provision.install_path(item)
+        except (
+            provision.ProvisionError,
+            OSError,
+            json.JSONDecodeError,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as error:
+            print(f"  INFO provision paths unavailable: {error}")
+        else:
+            print(f"  INFO provision root: {version_root}")
+            print(f"  INFO selected engine link: {version_root.parent / 'current'}")
+        print(f"  INFO state directory: {STATE}")
+        print(f"  INFO runtime directory: {runtime_dir()}")
+        print(f"  INFO engine socket: {socket_path()}")
     return result
 
 
@@ -534,9 +615,10 @@ def lease(identifier: str) -> int:
         raise RemoteError(f"remote path is not a directory: {project}")
     lease_path = LEASES / f"{identifier}.json"
     with locked():
-        active = clean_stale_leases()
-        STOP.unlink(missing_ok=True)
+        active = active_leases()
         current = start_engine(restart_if_changed=not active)
+        clean_stale_leases()
+        STOP.unlink(missing_ok=True)
         atomic_json(
             lease_path,
             {
@@ -599,7 +681,14 @@ def main() -> int:
         if action == "verify":
             return verify()
         if action == "doctor":
-            return doctor()
+            arguments = sys.argv[2:]
+            if arguments not in ([], ["--verbose"]):
+                print(
+                    "usage: remote-development.py doctor [--verbose]",
+                    file=sys.stderr,
+                )
+                return 2
+            return doctor(verbose=bool(arguments))
         if action == "remove":
             return remove()
         if action == "status":
@@ -609,7 +698,8 @@ def main() -> int:
         if action == "reap" and len(sys.argv) == 3:
             return reap(sys.argv[2])
         print(
-            "usage: remote-development.py {converge|verify|doctor|remove|status|lease ID}",
+            "usage: remote-development.py "
+            "{converge|verify|doctor [--verbose]|remove|status|lease ID}",
             file=sys.stderr,
         )
         return 2
