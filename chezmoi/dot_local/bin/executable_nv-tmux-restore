@@ -6,6 +6,8 @@ set -u
 marker="${ENVY_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/envy}/tmux-persistence.enabled"
 [[ -f "$marker" ]] || exit 0
 command -v tmux >/dev/null 2>&1 || exit 0
+helper_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -L) || exit 0
+snapshot_tool="$helper_dir/nv-tmux-snapshot"
 
 restore_startup() {
   local attempted start_time now restore_script resurrect_dir rc=0
@@ -24,7 +26,10 @@ restore_startup() {
   restore_script=$(tmux show-option -gqv @resurrect-restore-script-path 2>/dev/null)
   resurrect_dir=$(tmux show-option -gqv @resurrect-dir 2>/dev/null)
   if [[ -n "$restore_script" && -x "$restore_script" && -f "$resurrect_dir/last" ]]; then
-    "$restore_script" || rc=$?
+    if [[ -x "$snapshot_tool" ]]; then
+      "$snapshot_tool" normalize "$resurrect_dir/last" || rc=$?
+    fi
+    [[ "$rc" -ne 0 ]] || "$restore_script" || rc=$?
   fi
 
   if [[ "$rc" -eq 0 ]]; then

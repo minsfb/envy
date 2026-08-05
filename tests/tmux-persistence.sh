@@ -29,8 +29,10 @@ for source in "$ENV_ROOT"/chezmoi/dot_local/bin/executable_*; do
   cp "$source" "$target"
   chmod +x "$target"
 done
-cp "$ENV_ROOT/chezmoi/dot_pi/agent/extensions/nv-tmux-session.ts" \
-  "$HOME_DIR/.pi/agent/extensions/nv-tmux-session.ts"
+ENVY_BIN_DIR="$BIN_DIR" HOME="$HOME_DIR" chezmoi execute-template \
+  --source "$ENV_ROOT/chezmoi" --destination "$HOME_DIR" \
+  <"$ENV_ROOT/chezmoi/dot_pi/agent/extensions/nv-tmux-session.ts.tmpl" \
+  >"$HOME_DIR/.pi/agent/extensions/nv-tmux-session.ts"
 
 cat >"$HOME_DIR/.local/share/envy/tmux/tmux-resurrect/resurrect.tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -126,7 +128,7 @@ printf 'grouped_session\t__tmux_resume_test\twork\t:\t:0\n' >"$STATE_FILE"
 printf 'pane\twork\t0\t1\t:*\t0\tagent\t:/tmp/project\t1\tcodex\t:codex\n' >>"$STATE_FILE"
 env "${FEATURE_ENV[@]}" TMUX="$tmux_env" "$BIN_DIR/nv-tmux-snapshot" "$STATE_FILE"
 grep -q '^grouped_session' "$STATE_FILE" && fail 'temporary resume view remained in snapshot'
-grep -q $':nv-agent-resume v1 codex session-123$' "$STATE_FILE" || \
+grep -Fq ":$BIN_DIR/nv-agent-resume v1 codex session-123" "$STATE_FILE" || \
   fail 'snapshot did not contain the normalized agent resume command'
 
 for agent_command in claude codex pi; do
@@ -167,6 +169,9 @@ env "${FEATURE_ENV[@]}" TMUX="$tmux_env" \
 [[ "$(readlink "$TEMP/resurrect/last")" == tmux_resurrect_20250102T000000.txt ]] || \
   fail 'snapshot restore did not repoint the last checkpoint'
 [[ -f "$TEMP/restore-ran" ]] || fail 'snapshot restore did not invoke the restore script'
+grep -Fq ":$BIN_DIR/nv-agent-resume v1 codex session-123" \
+  "$TEMP/resurrect/tmux_resurrect_20250102T000000.txt" || \
+  fail 'snapshot restore did not upgrade a legacy relative resume command'
 if env "${FEATURE_ENV[@]}" TMUX="$tmux_env" \
   "$BIN_DIR/nv-tmux-snapshot" restore '../outside.txt' 2>/dev/null; then
   fail 'snapshot restore accepted an invalid checkpoint name'

@@ -24,7 +24,34 @@ ROLLOUT_ID_RE = re.compile(
     re.IGNORECASE,
 )
 AGENTS = {"claude", "codex", "pi"}
-RESUME_TOKEN = ":nv-agent-resume v1 "
+
+
+def resume_tool() -> Path:
+    return Path(__file__).absolute().with_name("nv-agent-resume")
+
+
+def resume_field(agent: str, session_id: str) -> str:
+    command = [str(resume_tool()), "v1", agent, session_id]
+    return ":" + " ".join(shlex.quote(argument) for argument in command)
+
+
+def resume_arguments(value: str) -> list[str] | None:
+    """Parse both legacy PATH-based and current absolute resume commands."""
+    if not value.startswith(":"):
+        return None
+    try:
+        arguments = shlex.split(value[1:])
+    except ValueError:
+        return None
+    if (
+        len(arguments) != 4
+        or Path(arguments[0]).name != "nv-agent-resume"
+        or arguments[1] != "v1"
+        or arguments[2] not in AGENTS
+        or not SESSION_ID_RE.fullmatch(arguments[3])
+    ):
+        return None
+    return arguments
 
 
 def tmux_lines(*arguments: str) -> list[str]:
@@ -242,7 +269,7 @@ def rewrite(path: Path) -> None:
                             f"{fields[1]}:{fields[2]}.{fields[5]}: {session_id} -> {exact}",
                         )
                         session_id = exact
-                fields[10] = f"{RESUME_TOKEN}{agent} {session_id}"
+                fields[10] = resume_field(agent, session_id)
                 raw_line = "\t".join(fields)
         output.append(raw_line)
 
@@ -250,6 +277,37 @@ def rewrite(path: Path) -> None:
     if updated == original:
         return
 
+    mode = stat.S_IMODE(path.stat().st_mode)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(updated)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def normalize_resume_paths(path: Path) -> None:
+    """Upgrade legacy relative resume commands without changing other state."""
+    path = path.resolve(strict=True)
+    original = path.read_text(encoding="utf-8")
+    output: list[str] = []
+    changed = False
+    for raw_line in original.splitlines():
+        fields = raw_line.split("\t")
+        if fields[:1] == ["pane"] and len(fields) >= 11:
+            arguments = resume_arguments(fields[10])
+            if arguments and arguments[0] != str(resume_tool()):
+                fields[10] = resume_field(arguments[2], arguments[3])
+                raw_line = "\t".join(fields)
+                changed = True
+        output.append(raw_line)
+    if not changed:
+        return
+
+    updated = "\n".join(output) + ("\n" if original.endswith("\n") else "")
     mode = stat.S_IMODE(path.stat().st_mode)
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
@@ -294,7 +352,12 @@ def snapshot_label(snapshot: Path, current_name: str) -> str:
     else:
         label = snapshot.name
     try:
-        count = snapshot.read_text(encoding="utf-8").count(RESUME_TOKEN)
+        count = sum(
+            1
+            for line in snapshot.read_text(encoding="utf-8").splitlines()
+            if len((fields := line.split("\t"))) >= 11
+            and resume_arguments(fields[10]) is not None
+        )
     except (OSError, UnicodeError):
         count = 0
     label += f"  [{count} agent{'s' if count != 1 else ''}]"
@@ -391,6 +454,7 @@ def restore_snapshot(selection: str) -> int:
         display_message(f"Tmux snapshot not found: {snapshot.name}")
         return 1
 
+    normalize_resume_paths(snapshot)
     point_last_at(directory, snapshot.name)
     restore_script = tmux_option("@resurrect-restore-script-path")
     if not restore_script or not os.access(restore_script, os.X_OK):
@@ -400,7 +464,7 @@ def restore_snapshot(selection: str) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) >= 2 and sys.argv[1] in {"choose", "restore"}:
+    if len(sys.argv) >= 2 and sys.argv[1] in {"choose", "normalize", "restore"}:
         parser = argparse.ArgumentParser(prog="nv-tmux-snapshot")
         subparsers = parser.add_subparsers(dest="command", required=True)
         choose = subparsers.add_parser("choose")
@@ -409,9 +473,18 @@ def main() -> int:
         choose.add_argument("--offset", type=int, default=0)
         restore = subparsers.add_parser("restore")
         restore.add_argument("snapshot")
+        normalize = subparsers.add_parser("normalize")
+        normalize.add_argument("snapshot")
         arguments = parser.parse_args()
         if arguments.command == "choose":
             choose_snapshot(arguments.client, arguments.pane, arguments.offset)
+            return 0
+        if arguments.command == "normalize":
+            try:
+                normalize_resume_paths(Path(arguments.snapshot))
+            except (OSError, UnicodeError) as error:
+                print(f"nv-tmux-snapshot: {error}", file=sys.stderr)
+                return 1
             return 0
         return restore_snapshot(arguments.snapshot)
 
@@ -419,6 +492,7 @@ def main() -> int:
         print(
             "usage: nv-tmux-snapshot RESURRECT_STATE_FILE\n"
             "       nv-tmux-snapshot choose [--client C] [--pane P] [--offset N]\n"
+            "       nv-tmux-snapshot normalize SNAPSHOT\n"
             "       nv-tmux-snapshot restore {SNAPSHOT|last}",
             file=sys.stderr,
         )

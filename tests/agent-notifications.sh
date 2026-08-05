@@ -25,8 +25,10 @@ for helper in nv-agent-notify nv-terminal-notify; do
 done
 cp "$ROOT/chezmoi/dot_config/opencode/plugins/nv-agent-notifications.js" \
   "$CONFIG_DIR/opencode/plugins/nv-agent-notifications.js"
-cp "$ROOT/chezmoi/dot_pi/agent/extensions/nv-tmux-session.ts" \
-  "$HOME_DIR/.pi/agent/extensions/nv-tmux-session.ts"
+ENVY_BIN_DIR="$BIN_DIR" HOME="$HOME_DIR" chezmoi execute-template \
+  --source "$ROOT/chezmoi" --destination "$HOME_DIR" \
+  <"$ROOT/chezmoi/dot_pi/agent/extensions/nv-tmux-session.ts.tmpl" \
+  >"$HOME_DIR/.pi/agent/extensions/nv-tmux-session.ts"
 mkdir -p "$CONFIG_DIR/alacritty"
 cp "$ROOT/chezmoi/dot_config/alacritty/alacritty.toml" \
   "$CONFIG_DIR/alacritty/alacritty.toml"

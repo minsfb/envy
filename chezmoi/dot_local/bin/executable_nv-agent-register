@@ -148,7 +148,7 @@ def persist_record(
 
 
 def request_snapshot() -> None:
-    helper = Path.home() / ".local" / "bin" / "nv-tmux-save"
+    helper = Path(__file__).absolute().with_name("nv-tmux-save")
     if not helper.is_file():
         return
     subprocess.Popen(

@@ -7,7 +7,10 @@ set -u
 # from tmux rather than the launcher, so nothing is inherited.
 envy_config_dir="${ENVY_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/envy}"
 envy_data_dir="${ENVY_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/envy}"
-envy_bin_dir="${ENVY_BIN_DIR:-$HOME/.local/bin}"
+
+# Every helper is installed as one atomic suite. Resolve companions beside this
+# executable so a changed bin root cannot silently mix old and new copies.
+helper_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -L) || exit 0
 
 marker="$envy_config_dir/tmux-persistence.enabled"
 [[ -f "$marker" ]] || exit 0
@@ -15,12 +18,13 @@ marker="$envy_config_dir/tmux-persistence.enabled"
 plugin_root="$envy_data_dir/tmux"
 resurrect="$plugin_root/tmux-resurrect"
 continuum="$plugin_root/tmux-continuum"
-snapshot="$envy_bin_dir/nv-tmux-snapshot"
-save_tool="$envy_bin_dir/nv-tmux-save"
-restore_tool="$envy_bin_dir/nv-tmux-restore"
+snapshot="$helper_dir/nv-tmux-snapshot"
+save_tool="$helper_dir/nv-tmux-save"
+restore_tool="$helper_dir/nv-tmux-restore"
+resume_tool="$helper_dir/nv-agent-resume"
 
 [[ -x "$resurrect/resurrect.tmux" && -x "$continuum/continuum.tmux" ]] || exit 0
-[[ -x "$snapshot" && -x "$save_tool" && -x "$restore_tool" ]] || exit 0
+[[ -x "$snapshot" && -x "$save_tool" && -x "$restore_tool" && -x "$resume_tool" ]] || exit 0
 
 state_home=${XDG_STATE_HOME:-$HOME/.local/state}
 host_key=$(hostname -s 2>/dev/null || hostname)
@@ -31,10 +35,12 @@ chmod 700 "$resurrect_dir"
 
 printf -v snapshot_command '%q' "$snapshot"
 printf -v save_command '%q quiet' "$save_tool"
+printf -v resume_command '%q' "$resume_tool"
 
 tmux set-option -gq @nv_tmux_persistence 1
+tmux set-option -gq @nv_agent_resume_command "$resume_tool"
 tmux set-option -gq @resurrect-dir "$resurrect_dir"
-tmux set-option -gq @resurrect-processes 'nv-agent-resume'
+tmux set-option -gq @resurrect-processes "$resume_command"
 tmux set-option -gq @resurrect-hook-post-save-layout "$snapshot_command"
 tmux set-option -gq @resurrect-save-script-path "$resurrect/scripts/save.sh"
 tmux set-option -gq @resurrect-restore-script-path "$resurrect/scripts/restore.sh"

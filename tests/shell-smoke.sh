@@ -16,6 +16,9 @@ chezmoi execute-template --source "$SOURCE" --override-data "$OVERRIDE" \
   <"$SOURCE/dot_zshrc.tmpl" >"$TEMP/zshrc"
 chezmoi execute-template --source "$SOURCE" --override-data "$OVERRIDE" \
   <"$SOURCE/dot_bashrc.tmpl" >"$TEMP/bashrc"
+ENVY_BIN_DIR="$TEMP/home/.local/bin" chezmoi execute-template \
+  --source "$SOURCE" --destination "$TEMP/home" \
+  <"$SOURCE/dot_tmux.conf.tmpl" >"$TEMP/tmux.conf"
 zsh -n "$TEMP/zshrc"
 bash -n "$TEMP/bashrc"
 grep -q 'shell.d' "$TEMP/zshrc" || fail 'zsh bundle fragment hook is missing'
@@ -35,7 +38,7 @@ ENVY_BASH_EXECD='' ENVY_NO_ZSH='' HANDOFF_MARKER="$TEMP/handoff" HOME="$TEMP/hom
 [[ -f "$TEMP/handoff" ]] || fail 'interactive Bash did not hand off to zsh'
 
 if command -v tmux >/dev/null 2>&1; then
-  tmux -L "$SOCKET_NAME" -f "$SOURCE/dot_tmux.conf" new-session -d -s smoke
+  tmux -L "$SOCKET_NAME" -f "$TEMP/tmux.conf" new-session -d -s smoke
   [[ "$(tmux -L "$SOCKET_NAME" show-options -gv set-titles)" == on ]] \
     || fail 'tmux terminal titles are not enabled'
   [[ "$(tmux -L "$SOCKET_NAME" show-options -gv bell-action)" == any ]] \

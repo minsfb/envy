@@ -2,6 +2,10 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+{{- $envyBin := env "ENVY_BIN_DIR" -}}
+{{- if not $envyBin -}}{{- $envyBin = joinPath .chezmoi.homeDir ".local/bin" -}}{{- end }}
+const registerHelper = {{ joinPath $envyBin "nv-agent-register" | toJson }};
+
 function notify(action: "start" | "end", ctx: any): void {
 	const home = process.env.HOME;
 	if (!home || !process.env.TMUX_PANE) return;
@@ -15,7 +19,7 @@ function notify(action: "start" | "end", ctx: any): void {
 		cwd: ctx.cwd ?? process.cwd(),
 	});
 
-	spawnSync(join(home, ".local", "bin", "nv-agent-register"), ["pi", action], {
+	spawnSync(registerHelper, ["pi", action], {
 		input: payload,
 		stdio: ["pipe", "ignore", "ignore"],
 		timeout: 2000,

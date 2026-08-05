@@ -1,3 +1,27 @@
+{{- $envyBin := env "ENVY_BIN_DIR" -}}
+{{- if not $envyBin -}}{{- $envyBin = joinPath .chezmoi.homeDir ".local/bin" -}}{{- end -}}
+{{- $snapshot := joinPath $envyBin "nv-tmux-snapshot" -}}
+{{- $bootstrap := joinPath $envyBin "nv-tmux-bootstrap" -}}
+{{- $snapshotShell := printf "'%s'" (replace "'" "'\"'\"'" $snapshot) -}}
+{{- $bootstrapShell := printf "'%s'" (replace "'" "'\"'\"'" $bootstrap) -}}
+{{- $snapshotCommand := printf "[ -x %s ] && %s choose || true" $snapshotShell $snapshotShell -}}
+{{- $snapshotCommand = replace "#" "##" $snapshotCommand -}}
+{{- $snapshotCommand = replace "\\" "\\\\" $snapshotCommand -}}
+{{- $snapshotCommand = replace "\"" "\\\"" $snapshotCommand -}}
+{{- $snapshotCommand = replace "$" "\\$" $snapshotCommand -}}
+{{- $snapshotCommand = printf "\"%s\"" $snapshotCommand -}}
+{{- $bootstrapTest := printf "[ -x %s ]" $bootstrapShell -}}
+{{- $bootstrapTest = replace "#" "##" $bootstrapTest -}}
+{{- $bootstrapTest = replace "\\" "\\\\" $bootstrapTest -}}
+{{- $bootstrapTest = replace "\"" "\\\"" $bootstrapTest -}}
+{{- $bootstrapTest = replace "$" "\\$" $bootstrapTest -}}
+{{- $bootstrapTest = printf "\"%s\"" $bootstrapTest -}}
+{{- $bootstrapCommand := $bootstrapShell -}}
+{{- $bootstrapCommand = replace "#" "##" $bootstrapCommand -}}
+{{- $bootstrapCommand = replace "\\" "\\\\" $bootstrapCommand -}}
+{{- $bootstrapCommand = replace "\"" "\\\"" $bootstrapCommand -}}
+{{- $bootstrapCommand = replace "$" "\\$" $bootstrapCommand -}}
+{{- $bootstrapCommand = printf "\"%s\"" $bootstrapCommand -}}
 # ~/.tmux.conf - learnable tmux defaults
 # Portable: this single file is all you need. scp it to any remote host.
 # Discoverability: press  Ctrl-b Space  for an action menu, Ctrl-b ?  for a cheat sheet.
@@ -95,7 +119,7 @@ bind -N "Action menu" Space display-menu -T "#[align=centre fg=#81a2be] tmux " -
   "Detach (keeps running)" d "detach-client" \
   "Switch/list sessions"   w "choose-tree -Zs" \
   "Rename session"         R "command-prompt -I \"#S\" \"rename-session -- '%%'\"" \
-  "Session snapshots"      S "run-shell \"[ -x ~/.local/bin/nv-tmux-snapshot ] && ~/.local/bin/nv-tmux-snapshot choose || true\"" \
+  "Session snapshots"      S { run-shell {{ $snapshotCommand }} } \
   "" \
   "Cheat sheet"         ? "display-popup -w 78 -h 30 -E 'less -R ~/.config/tmux/cheatsheet.txt'" \
   "Reload config"       g "source-file ~/.tmux.conf"
@@ -141,5 +165,4 @@ bind -T copy-mode-vi C-c send -X copy-selection-and-cancel
 # ── Durable sessions (managed by the optional envy feature) ──────────────
 # The bootstrap is a no-op until tmux-persistence is enabled. Keeping the guard
 # here preserves this file's standalone portability on hosts without envy.
-if-shell '[ -x "$HOME/.local/bin/nv-tmux-bootstrap" ]' \
-  'run-shell "$HOME/.local/bin/nv-tmux-bootstrap"'
+if-shell {{ $bootstrapTest }} { run-shell {{ $bootstrapCommand }} }
