@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import stat
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -25,6 +27,17 @@ launcher = load_module("envy_remote_launcher", ROOT / "lib" / "remote.py")
 
 
 class RemoteLauncherTest(unittest.TestCase):
+    def assert_session_hardening(self, command: list[str]) -> None:
+        expected = list(launcher.SSH_SESSION_OPTIONS)
+        self.assertEqual(command[1 : 1 + len(expected)], expected)
+        for option in (
+            "ForwardAgent=no",
+            "ForwardX11=no",
+            "ForwardX11Trusted=no",
+            "ClearAllForwardings=yes",
+        ):
+            self.assertEqual(command.count(option), 1)
+
     def test_host_validation_accepts_ssh_aliases(self) -> None:
         self.assertEqual(launcher.validate_host("user@dev.example"), "user@dev.example")
 
@@ -34,8 +47,159 @@ class RemoteLauncherTest(unittest.TestCase):
                 launcher.validate_host(value)
 
     def test_remote_helper_command_is_fixed(self) -> None:
-        command = launcher.remote_command("dev", "status")
-        self.assertEqual(command[-1], 'exec "$HOME/.local/bin/envy" remote _status')
+        with mock.patch.object(launcher, "ssh", return_value="/usr/bin/ssh"):
+            status = launcher.remote_command("dev", "status")
+            doctor = launcher.remote_command("dev", "doctor", verbose=True)
+        self.assertEqual(status[-1], 'exec "$HOME/.local/bin/envy" remote _status')
+        self.assertEqual(
+            doctor[-1], 'exec "$HOME/.local/bin/envy" remote _doctor --verbose'
+        )
+
+    def test_remote_helper_rejects_unknown_action(self) -> None:
+        with self.assertRaisesRegex(
+            launcher.LauncherError, "invalid remote inspection action"
+        ):
+            launcher.remote_command("dev", "doctor; unsafe")
+
+    def test_connection_and_session_commands_have_exact_argv(self) -> None:
+        control = Path("/tmp/control")
+        with mock.patch.object(launcher, "ssh", return_value="/usr/bin/ssh"):
+            master = launcher.master_command("dev", control)
+            lease = launcher.lease_command(control, "dev", "0123456789abcdef")
+            status = launcher.remote_command("dev", "status")
+            doctor = launcher.remote_command("dev", "doctor")
+        prefix = ["/usr/bin/ssh", *launcher.SSH_SESSION_OPTIONS]
+        self.assertEqual(
+            master,
+            [
+                *prefix,
+                "-M",
+                "-S",
+                "/tmp/control",
+                "-o",
+                "ControlPersist=no",
+                "-o",
+                "ExitOnForwardFailure=yes",
+                "-N",
+                "dev",
+            ],
+        )
+        self.assertEqual(
+            lease,
+            [
+                *prefix,
+                "-S",
+                "/tmp/control",
+                "-o",
+                "ControlMaster=no",
+                "dev",
+                'exec "$HOME/.local/bin/envy" remote _lease 0123456789abcdef',
+            ],
+        )
+        self.assertEqual(
+            status,
+            [*prefix, "dev", 'exec "$HOME/.local/bin/envy" remote _status'],
+        )
+        self.assertEqual(
+            doctor,
+            [*prefix, "dev", 'exec "$HOME/.local/bin/envy" remote _doctor'],
+        )
+        for command in (master, lease, status, doctor):
+            with self.subTest(command=command):
+                self.assert_session_hardening(command)
+
+    def test_control_check_and_exit_remain_mux_operations(self) -> None:
+        with mock.patch.object(launcher, "ssh", return_value="/usr/bin/ssh"):
+            commands = (
+                launcher.control_command(Path("/tmp/control"), "dev", "check"),
+                launcher.control_command(Path("/tmp/control"), "dev", "exit"),
+            )
+        self.assertEqual(
+            commands,
+            (
+                ["/usr/bin/ssh", "-S", "/tmp/control", "-O", "check", "dev"],
+                ["/usr/bin/ssh", "-S", "/tmp/control", "-O", "exit", "dev"],
+            ),
+        )
+
+    def test_forward_operation_is_loopback_only(self) -> None:
+        completed = mock.Mock(returncode=0)
+        with (
+            mock.patch.object(launcher, "ssh", return_value="/usr/bin/ssh"),
+            mock.patch.object(launcher, "free_port", return_value=43127),
+            mock.patch.object(
+                launcher.subprocess, "run", return_value=completed
+            ) as run,
+        ):
+            port = launcher.add_forward(
+                Path("/tmp/control"), "dev", "/run/user/123/server.sock", None
+            )
+        self.assertEqual(port, 43127)
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "/usr/bin/ssh",
+                "-S",
+                "/tmp/control",
+                "-O",
+                "forward",
+                "-L",
+                "127.0.0.1:43127:/run/user/123/server.sock",
+                "dev",
+            ],
+        )
+
+    def test_verbose_doctor_reports_local_policy_and_forwards_flag(self) -> None:
+        completed = mock.Mock(returncode=7)
+        output = io.StringIO()
+        with (
+            mock.patch.object(launcher.sys, "platform", "darwin"),
+            mock.patch.object(launcher, "ssh", return_value="/usr/bin/ssh"),
+            mock.patch.object(launcher.shutil, "which", return_value="/usr/bin/open"),
+            mock.patch.object(
+                launcher.subprocess, "run", return_value=completed
+            ) as run,
+            redirect_stdout(output),
+        ):
+            result = launcher.inspect_remote("dev", "doctor", verbose=True)
+        self.assertEqual(result, 7)
+        self.assertIn("OK local browser opener is available", output.getvalue())
+        self.assertIn("INFO local platform: darwin", output.getvalue())
+        self.assertIn("INFO browser opener: /usr/bin/open", output.getvalue())
+        self.assertIn("INFO SSH policy:", output.getvalue())
+        self.assertIn("INFO tunnel policy:", output.getvalue())
+        self.assertEqual(
+            run.call_args.args[0][-1],
+            'exec "$HOME/.local/bin/envy" remote _doctor --verbose',
+        )
+
+    def test_default_doctor_output_and_remote_command_are_unchanged(self) -> None:
+        completed = mock.Mock(returncode=0)
+        output = io.StringIO()
+        with (
+            mock.patch.object(launcher.sys, "platform", "darwin"),
+            mock.patch.object(launcher, "ssh", return_value="/usr/bin/ssh"),
+            mock.patch.object(
+                launcher.subprocess, "run", return_value=completed
+            ) as run,
+            redirect_stdout(output),
+        ):
+            result = launcher.inspect_remote("dev", "doctor")
+        self.assertEqual(result, 0)
+        self.assertNotIn("INFO", output.getvalue())
+        self.assertEqual(
+            run.call_args.args[0][-1], 'exec "$HOME/.local/bin/envy" remote _doctor'
+        )
+
+    def test_main_forwards_verbose_to_inspection(self) -> None:
+        with (
+            mock.patch.object(
+                launcher.sys, "argv", ["envy remote", "doctor", "dev", "--verbose"]
+            ),
+            mock.patch.object(launcher, "inspect_remote", return_value=3) as inspect,
+        ):
+            self.assertEqual(launcher.main(), 3)
+        inspect.assert_called_once_with("dev", "doctor", verbose=True)
 
 
 class RemoteSettingsTest(unittest.TestCase):
@@ -110,11 +274,13 @@ while True: time.sleep(1)
         executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
         original_dependency = self.feature.provision.dependency
         original_command = self.feature.provision.managed_command
+        original_verify = self.feature.provision.verify
         original_settings = self.feature.settings
         original_runtime = self.feature.runtime_dir
         original_fingerprint = self.feature.extension_fingerprint
         self.feature.provision.dependency = lambda _name: {"version": "1.2.3"}
         self.feature.provision.managed_command = lambda _item: executable
+        self.feature.provision.verify = lambda _name: 0
         self.feature.settings = lambda: (300, self.feature.DEFAULT_REGISTRY)
         self.feature.runtime_dir = lambda: self.base / "r"
         fingerprint = ["inventory-one"]
@@ -149,6 +315,7 @@ while True: time.sleep(1)
             self.feature.stop_engine()
             self.feature.provision.dependency = original_dependency
             self.feature.provision.managed_command = original_command
+            self.feature.provision.verify = original_verify
             self.feature.settings = original_settings
             self.feature.runtime_dir = original_runtime
             self.feature.extension_fingerprint = original_fingerprint
@@ -201,10 +368,7 @@ while True: time.sleep(1)
         ):
             initial = self.feature.extension_fingerprint()
             package = (
-                self.feature.DATA
-                / "extensions"
-                / "example.extension"
-                / "package.json"
+                self.feature.DATA / "extensions" / "example.extension" / "package.json"
             )
             package.parent.mkdir(parents=True)
             package.write_text('{"version":"1.0.0"}\n', encoding="utf-8")

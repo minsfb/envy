@@ -173,6 +173,7 @@ WSL host, then connect from macOS, Linux, or WSL with the system OpenSSH client:
 envy remote open user@host /path/to/project
 envy remote status user@host
 envy remote doctor user@host
+envy remote doctor user@host --verbose
 ```
 
 The command prints a loopback URL, opens it in the default browser, and stays in
@@ -180,6 +181,15 @@ the foreground to own the SSH lease. Use `--no-browser` for PWA or manual
 workflows and `--local-port PORT` when a stable local port is needed. No remote
 TCP port is exposed: the pinned `code-server` process listens on a private Unix
 socket and is reachable only through the SSH control connection.
+
+`remote doctor` is read-only. Its default output checks the local browser
+opener and system OpenSSH client before running the remote checks. `--verbose`
+also reports the selected local opener, SSH forwarding policy, and additional
+remote engine and provisioning detail; it does not repair or reconfigure either
+host. Envy explicitly disables agent and X11 forwarding for these processes
+without changing SSH configuration. Before starting or restarting an editor,
+Envy fully verifies its pinned version and provisioned tree. A failed check
+does not stop an existing engine and directs the user to a focused upgrade.
 
 One editor process is shared by all leases for the remote Unix user. The final
 lease starts a 300-second shutdown grace period; a reconnect cancels it. Base

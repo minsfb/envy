@@ -24,6 +24,18 @@ class LauncherError(RuntimeError):
     pass
 
 
+SSH_SESSION_OPTIONS = (
+    "-o",
+    "ForwardAgent=no",
+    "-o",
+    "ForwardX11=no",
+    "-o",
+    "ForwardX11Trusted=no",
+    "-o",
+    "ClearAllForwardings=yes",
+)
+
+
 def validate_host(value: str) -> str:
     if (
         not value
@@ -45,24 +57,28 @@ def control_command(control: Path, host: str, operation: str) -> list[str]:
     return [ssh(), "-S", str(control), "-O", operation, host]
 
 
+def session_command(*arguments: str) -> list[str]:
+    """Build an SSH command that may create a connection or remote session."""
+    return [ssh(), *SSH_SESSION_OPTIONS, *arguments]
+
+
+def master_command(host: str, control: Path) -> list[str]:
+    return session_command(
+        "-M",
+        "-S",
+        str(control),
+        "-o",
+        "ControlPersist=no",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-N",
+        host,
+    )
+
+
 def start_master(host: str, control: Path) -> subprocess.Popen[bytes]:
     process = subprocess.Popen(
-        [
-            ssh(),
-            "-M",
-            "-S",
-            str(control),
-            "-o",
-            "ControlPersist=no",
-            "-o",
-            "ForwardAgent=no",
-            "-o",
-            "ClearAllForwardings=yes",
-            "-o",
-            "ExitOnForwardFailure=yes",
-            "-N",
-            host,
-        ],
+        master_command(host, control),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=None,
@@ -162,20 +178,25 @@ def open_browser(url: str) -> None:
         raise LauncherError("no browser opener found; retry with --no-browser")
 
 
-def remote_command(host: str, action: str) -> list[str]:
+def remote_command(host: str, action: str, verbose: bool = False) -> list[str]:
     validate_host(host)
-    return [
-        ssh(),
-        "-o",
-        "ForwardAgent=no",
-        "-o",
-        "ClearAllForwardings=yes",
+    commands = {
+        "status": 'exec "$HOME/.local/bin/envy" remote _status',
+        "doctor": 'exec "$HOME/.local/bin/envy" remote _doctor',
+    }
+    try:
+        command = commands[action]
+    except KeyError as error:
+        raise LauncherError("invalid remote inspection action") from error
+    if action == "doctor" and verbose:
+        command += " --verbose"
+    return session_command(
         host,
-        f'exec "$HOME/.local/bin/envy" remote _{action}',
-    ]
+        command,
+    )
 
 
-def inspect_remote(host: str, action: str) -> int:
+def inspect_remote(host: str, action: str, verbose: bool = False) -> int:
     if action == "doctor":
         if (
             sys.platform == "darwin"
@@ -186,7 +207,35 @@ def inspect_remote(host: str, action: str) -> int:
         else:
             print("  WARN no local browser opener found; use --no-browser")
         print(f"  OK system OpenSSH client: {ssh()}")
-    return subprocess.run(remote_command(host, action), check=False).returncode
+        if verbose:
+            if sys.platform == "darwin":
+                opener = shutil.which("open") or "open"
+            else:
+                opener = shutil.which("wslview") or shutil.which("xdg-open")
+            print(f"  INFO local platform: {sys.platform}")
+            print(f"  INFO browser opener: {opener or 'webbrowser fallback only'}")
+            print(
+                "  INFO SSH policy: agent, X11, trusted X11, and configured "
+                "forwards are disabled"
+            )
+            print(
+                "  INFO tunnel policy: one loopback-only local port forwards "
+                "to the private remote Unix socket"
+            )
+    return subprocess.run(
+        remote_command(host, action, verbose=verbose), check=False
+    ).returncode
+
+
+def lease_command(control: Path, host: str, lease_id: str) -> list[str]:
+    return session_command(
+        "-S",
+        str(control),
+        "-o",
+        "ControlMaster=no",
+        host,
+        f'exec "$HOME/.local/bin/envy" remote _lease {lease_id}',
+    )
 
 
 def open_remote(
@@ -204,19 +253,7 @@ def open_remote(
         try:
             master = start_master(host, control)
             lease = subprocess.Popen(
-                [
-                    ssh(),
-                    "-S",
-                    str(control),
-                    "-o",
-                    "ControlMaster=no",
-                    "-o",
-                    "ForwardAgent=no",
-                    "-o",
-                    "ClearAllForwardings=yes",
-                    host,
-                    f'exec "$HOME/.local/bin/envy" remote _lease {lease_id}',
-                ],
+                lease_command(control, host, lease_id),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=None,
@@ -306,7 +343,11 @@ def main() -> int:
                 arguments.port,
                 "browser",
             )
-        return inspect_remote(arguments.host, arguments.action)
+        return inspect_remote(
+            arguments.host,
+            arguments.action,
+            verbose=getattr(arguments, "verbose", False),
+        )
     except (LauncherError, OSError, subprocess.SubprocessError) as error:
         print(f"envy remote: {error}", file=sys.stderr)
         return 1

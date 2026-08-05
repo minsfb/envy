@@ -203,6 +203,10 @@ envy remote doctor HOST [--verbose]
   count, and pending shutdown deadline.
 - `doctor` checks local browser/OpenSSH prerequisites and remote feature,
   platform, engine, disk, and stale-session state without persistent mutation.
+  `--verbose` additionally reports the selected local opener, the fixed SSH
+  hardening and tunnel policy, and detailed remote engine and provisioning
+  checks. The flag is forwarded as a fixed literal rather than incorporated
+  from user-supplied remote shell text.
 
 The command remains in the foreground. `Ctrl-C`, terminal close, or loss of the
 SSH connection releases its remote lease. The last lease stops the editor after
@@ -366,6 +370,12 @@ Verify, without mutation:
 - Report drift when the pin, selected link, permissions, or recorded files do
   not match.
 
+Immediately before starting or restarting an engine, repeat the full pinned
+version and provisioned-tree verification. A running engine that was already
+verified may be reused without rehashing its tree for every new lease. If a
+pre-start verification fails, fail closed with focused upgrade guidance and do
+not stop or replace any live engine.
+
 Doctor:
 
 - Include the verify checks plus an executable version probe, private socket
@@ -504,6 +514,11 @@ organization-specific SSH configuration. Envy must not:
 - rewrite the user's SSH configuration.
 
 Only the loopback-to-stream-local forward needed by the session is added.
+Every SSH invocation that can create a connection or remote session explicitly
+sets `ForwardAgent=no`, `ForwardX11=no`, `ForwardX11Trusted=no`, and
+`ClearAllForwardings=yes`; this process-local policy does not edit the user's
+SSH configuration. Control operations then add only the required
+`127.0.0.1:<port>` to private-remote-socket forward.
 Host-key changes and forwarding restrictions remain visible as ordinary SSH
 failures with focused guidance.
 
