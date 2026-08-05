@@ -39,6 +39,14 @@ def main() -> int:
     )
     if bundles:
         print(f"  Bundles:  {', '.join(bundles)}")
+    transaction = state.get("bundle_transaction")
+    if isinstance(transaction, dict):
+        print(
+            "  Pending:  bundle "
+            f"{transaction.get('action', 'operation')} "
+            f"{transaction.get('id', 'unknown')} "
+            f"({transaction.get('phase', 'unknown')})"
+        )
     print()
     print(
         f"  {'FEATURE':<18} {'TIER':<11} {'ORIGIN':<18} "

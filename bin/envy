@@ -9,11 +9,13 @@ export ENVY_ROOT ENVY_DIR
 _ENVY_RAW_ARGS=("$@")
 _ENVY_COMMAND_ARGS=()
 _ENVY_BUNDLES=()
+_ENVY_BUNDLES_EXPLICIT=false
 _ENVY_INDEX=0
 while (( _ENVY_INDEX < ${#_ENVY_RAW_ARGS[@]} )); do
   _ENVY_ARG="${_ENVY_RAW_ARGS[$_ENVY_INDEX]}"
   case "$_ENVY_ARG" in
     --bundle)
+      _ENVY_BUNDLES_EXPLICIT=true
       ((_ENVY_INDEX++)) || true
       (( _ENVY_INDEX < ${#_ENVY_RAW_ARGS[@]} )) || {
         echo "Error: --bundle requires a path" >&2
@@ -21,7 +23,10 @@ while (( _ENVY_INDEX < ${#_ENVY_RAW_ARGS[@]} )); do
       }
       _ENVY_BUNDLES+=("${_ENVY_RAW_ARGS[$_ENVY_INDEX]}")
       ;;
-    --bundle=*) _ENVY_BUNDLES+=("${_ENVY_ARG#*=}") ;;
+    --bundle=*)
+      _ENVY_BUNDLES_EXPLICIT=true
+      _ENVY_BUNDLES+=("${_ENVY_ARG#*=}")
+      ;;
     *) _ENVY_COMMAND_ARGS+=("$_ENVY_ARG") ;;
   esac
   ((_ENVY_INDEX++)) || true
@@ -32,18 +37,89 @@ unset _ENVY_RAW_ARGS _ENVY_COMMAND_ARGS _ENVY_INDEX _ENVY_ARG
 # shellcheck source=lib/paths.sh
 source "$ENVY_ROOT/lib/paths.sh"
 
-if [[ -z "${_ENVY_BUNDLES[0]+set}" ]]; then
+_ENVY_STATE_LOCK_DIR="$ENVY_CONFIG_DIR/state.lock.d"
+_ENVY_STATE_LOCK_OWNED=false
+_ENVY_STATE_LOCK_TOKEN_VALUE="${ENVY_STATE_LOCK_TOKEN:-}"
+unset ENVY_STATE_LOCK_TOKEN
+
+_state_lock_release() {
+  [[ "$_ENVY_STATE_LOCK_OWNED" == true ]] || return 0
+  rm -f "$_ENVY_STATE_LOCK_DIR/owner"
+  rmdir "$_ENVY_STATE_LOCK_DIR" 2>/dev/null || true
+  _ENVY_STATE_LOCK_OWNED=false
+}
+
+_state_lock_acquire() {
+  local existing_token="" owner_pid=""
+  if mkdir "$_ENVY_STATE_LOCK_DIR" 2>/dev/null; then
+    chmod 700 "$_ENVY_STATE_LOCK_DIR"
+    _ENVY_STATE_LOCK_TOKEN_VALUE="${_ENVY_STATE_LOCK_TOKEN_VALUE:-$$-$(date +%s)-${RANDOM:-0}}"
+    printf '%s\n%s\n' "$_ENVY_STATE_LOCK_TOKEN_VALUE" "$$" \
+      > "$_ENVY_STATE_LOCK_DIR/owner"
+    chmod 600 "$_ENVY_STATE_LOCK_DIR/owner"
+    _ENVY_STATE_LOCK_OWNED=true
+    return 0
+  fi
+  if [[ ! -f "$_ENVY_STATE_LOCK_DIR/owner" ]]; then
+    echo "Error: envy state lock is incomplete; retry or remove it after confirming no envy command is running: $_ENVY_STATE_LOCK_DIR" >&2
+    exit 1
+  fi
+  existing_token="$(sed -n '1p' "$_ENVY_STATE_LOCK_DIR/owner" 2>/dev/null || true)"
+  owner_pid="$(sed -n '2p' "$_ENVY_STATE_LOCK_DIR/owner" 2>/dev/null || true)"
+  if [[ -n "$_ENVY_STATE_LOCK_TOKEN_VALUE" \
+    && "$existing_token" == "$_ENVY_STATE_LOCK_TOKEN_VALUE" ]]; then
+    return 0
+  fi
+  if [[ "$owner_pid" =~ ^[0-9]+$ ]] && kill -0 "$owner_pid" 2>/dev/null; then
+    echo "Error: another envy command is updating state (pid $owner_pid); retry when it finishes." >&2
+    exit 1
+  fi
+  [[ "$owner_pid" =~ ^[0-9]+$ ]] || {
+    echo "Error: envy state lock metadata is invalid: $_ENVY_STATE_LOCK_DIR/owner" >&2
+    exit 1
+  }
+  rm -f "$_ENVY_STATE_LOCK_DIR/owner"
+  rmdir "$_ENVY_STATE_LOCK_DIR" 2>/dev/null || {
+    echo "Error: could not recover stale envy state lock: $_ENVY_STATE_LOCK_DIR" >&2
+    exit 1
+  }
+  _state_lock_acquire
+}
+
+_ENVY_EARLY_DRY_RUN=false
+for _ENVY_EARLY_ARG in "$@"; do
+  [[ "$_ENVY_EARLY_ARG" == --dry-run || "$_ENVY_EARLY_ARG" == -n ]] \
+    && _ENVY_EARLY_DRY_RUN=true
+done
+if [[ "${1:-help}" != help && "${1:-}" != --help && "${1:-}" != -h ]] \
+  && { [[ -f "$ENVY_CONFIG_DIR/state.json" ]] \
+    || { [[ "${1:-}" == install && "$_ENVY_EARLY_DRY_RUN" == false ]]; } \
+    || [[ -d "$_ENVY_STATE_LOCK_DIR" ]]; }; then
+  mkdir -p "$ENVY_CONFIG_DIR"
+  _state_lock_acquire
+fi
+unset _ENVY_EARLY_ARG _ENVY_EARLY_DRY_RUN
+trap '_state_lock_release' EXIT
+
+if [[ "$_ENVY_BUNDLES_EXPLICIT" == false ]]; then
   _ENVY_EARLY_STATE="$ENVY_CONFIG_DIR/state.json"
   if [[ -f "$_ENVY_EARLY_STATE" ]]; then
-    while IFS= read -r _ENVY_STORED_BUNDLE; do
-      [[ -n "$_ENVY_STORED_BUNDLE" ]] && _ENVY_BUNDLES+=("$_ENVY_STORED_BUNDLE")
-    done < <(python3 - "$_ENVY_EARLY_STATE" <<'PY' 2>/dev/null || true
+    if [[ "${1:-}" == bundle && "${2:-}" == forget && -n "${3:-}" ]]; then
+      while IFS= read -r -d '' _ENVY_STORED_BUNDLE; do
+        _ENVY_BUNDLES+=("$_ENVY_STORED_BUNDLE")
+      done < <(python3 "$ENVY_ROOT/lib/bundles.py" startup-paths \
+        "$_ENVY_EARLY_STATE" "$3" 2>/dev/null || true)
+    else
+      while IFS= read -r _ENVY_STORED_BUNDLE; do
+        [[ -n "$_ENVY_STORED_BUNDLE" ]] && _ENVY_BUNDLES+=("$_ENVY_STORED_BUNDLE")
+      done < <(python3 - "$_ENVY_EARLY_STATE" <<'PY' 2>/dev/null || true
 import json,sys
 for item in json.load(open(sys.argv[1])).get("bundles", []):
     if not item.get("core") and item.get("path"):
         print(item["path"])
 PY
-    )
+      )
+    fi
   fi
   unset _ENVY_EARLY_STATE _ENVY_STORED_BUNDLE
 fi
@@ -51,17 +127,29 @@ fi
 # shellcheck source=lib/features.sh
 source "$ENVY_ROOT/lib/features.sh"
 nv_manifest_init ${_ENVY_BUNDLES[0]+"${_ENVY_BUNDLES[@]}"}
+trap 'nv_manifest_cleanup; _state_lock_release' EXIT
 # shellcheck source=lib/state.sh
 source "$ENVY_ROOT/lib/state.sh"
+
+if [[ "$_ENVY_BUNDLES_EXPLICIT" == true && -f "$(nv_state_file)" ]]; then
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-active-set \
+    "$(nv_state_file)" "$(nv_manifest_file)"
+fi
 
 readonly ENV_FILE_NAME="init-sh.env"
 SELECT_ONLY=()
 SELECT_EXCEPT=()
 _ENVY_TEMP_STATE=""
+_ENVY_BUNDLE_TEMP_FILES=()
 
 _cleanup_all() {
+  local path
   [[ -n "$_ENVY_TEMP_STATE" ]] && rm -f "$_ENVY_TEMP_STATE"
+  for path in ${_ENVY_BUNDLE_TEMP_FILES[0]+"${_ENVY_BUNDLE_TEMP_FILES[@]}"}; do
+    rm -f "$path"
+  done
   nv_manifest_cleanup
+  _state_lock_release
 }
 trap '_cleanup_all' EXIT
 
@@ -81,8 +169,124 @@ _current_commit() {
   echo "$commit"
 }
 
+_bundle_transaction_pending() {
+  nv_state_exists \
+    && [[ "$(nv_state_get bundle_transaction.action '""' 2>/dev/null || true)" != "" ]]
+}
+
+_bundle_validate_pending_manifest() {
+  local phase which
+  _bundle_transaction_pending || return 0
+  phase="$(nv_state_get bundle_transaction.phase)"
+  case "$phase" in
+    removing|attaching) which=old ;;
+    reconciling) which=new ;;
+    *) die "Unknown pending bundle transaction phase: $phase" ;;
+  esac
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$(nv_manifest_file)" "$which"
+}
+
+_require_no_bundle_transaction() {
+  local action bundle phase
+  _bundle_transaction_pending || return 0
+  action="$(nv_state_get bundle_transaction.action '"operation"')"
+  bundle="$(nv_state_get bundle_transaction.id '"unknown"')"
+  phase="$(nv_state_get bundle_transaction.phase '"unknown"')"
+  die "Bundle $action for '$bundle' is pending in phase '$phase'; resume it with 'envy bundle $action'."
+}
+
+_run_fresh_envy() (
+  local key
+  for key in ${_ENVY_MANIFEST_EXPORT_KEYS[0]+"${_ENVY_MANIFEST_EXPORT_KEYS[@]}"} \
+    ${_ENVY_FACT_EXPORT_KEYS[0]+"${_ENVY_FACT_EXPORT_KEYS[@]}"}; do
+    unset "$key"
+  done
+  export ENVY_STATE_LOCK_TOKEN="$_ENVY_STATE_LOCK_TOKEN_VALUE"
+  exec "$ENVY_ROOT/bin/envy" "$@"
+)
+
+_bundle_temp_file() {
+  _ENVY_BUNDLE_TEMP_RESULT="$(mktemp "${TMPDIR:-/tmp}/envy-bundle.XXXXXX")"
+  _ENVY_BUNDLE_TEMP_FILES+=("$_ENVY_BUNDLE_TEMP_RESULT")
+}
+
+_bundle_json_lines() {
+  local path="$1" field="$2"
+  python3 - "$path" "$field" <<'PY'
+import json,sys
+value=json.load(open(sys.argv[1]))
+for item in value.get(sys.argv[2], []):
+    print(item)
+PY
+}
+
+_bundle_state_lines() {
+  local field="$1" value
+  value="$(nv_state_get "bundle_transaction.$field" '[]' 2>/dev/null || echo '[]')"
+  python3 -c 'import json,sys; print("\n".join(json.loads(sys.argv[1])))' "$value"
+}
+
+_bundle_verify_result() {
+  local feature="$1" rc=0
+  nv_verify_feature "$feature" >/dev/null 2>&1 || rc=$?
+  case "$rc" in
+    0) _ENVY_BUNDLE_VERIFY_RESULT=current ;;
+    "$ENVY_HANDLER_UNAVAILABLE") _ENVY_BUNDLE_VERIFY_RESULT=unknown ;;
+    *) _ENVY_BUNDLE_VERIFY_RESULT=drifted ;;
+  esac
+}
+
+_bundle_capture_baseline() {
+  local plan="$1" feature
+  local pairs=()
+  while IFS= read -r feature; do
+    [[ -n "$feature" ]] || continue
+    nv_feature_in_scope "$feature" || continue
+    _bundle_verify_result "$feature"
+    pairs+=("$feature=$_ENVY_BUNDLE_VERIFY_RESULT")
+  done < <(_bundle_json_lines "$plan" surviving_features)
+  python3 "$ENVY_ROOT/lib/bundles.py" baseline "$plan" \
+    ${pairs[0]+"${pairs[@]}"}
+}
+
+_bundle_manifest_hierarchy() (
+  local manifest="$1" facts_file key value
+  for key in ${_ENVY_FACT_EXPORT_KEYS[0]+"${_ENVY_FACT_EXPORT_KEYS[@]}"}; do
+    unset "$key"
+  done
+  facts_file="$(mktemp "${TMPDIR:-/tmp}/envy-bundle-facts.XXXXXX")"
+  trap 'rm -f "$facts_file"' EXIT
+  python3 "$ENVY_ROOT/lib/facts.py" "$manifest" > "$facts_file"
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    printf -v "$key" '%s' "$value"
+    export "${key?}"
+  done < "$facts_file"
+  rm -f "$facts_file"
+  nv_detect_platform
+  nv_platform_hierarchy "$ENVY_PLATFORM"
+)
+
+_bundle_print_plan() {
+  python3 - "$1" <<'PY'
+import json,sys
+value=json.load(open(sys.argv[1]))
+action=value["action"]
+print(f"envy bundle {action}")
+print(f"  Bundle: {value['id']}")
+if action == "detach":
+    departing=value.get("departing_features", [])
+    print("  Remove: " + (", ".join(departing) if departing else "no enabled bundle features"))
+else:
+    restored=value.get("forced_features", [])
+    print("  Restore: " + (", ".join(restored) if restored else "no previously enabled features"))
+print("  Reconcile: features that become newly drifted")
+PY
+}
+
 _prepare_state() {
   if nv_state_exists; then
+    _bundle_validate_pending_manifest || return $?
     if [[ "${ENVY_DRY_RUN:-false}" == true && -z "$_ENVY_TEMP_STATE" ]]; then
       _ENVY_TEMP_STATE="$(mktemp)"
       cp "$(nv_state_file)" "$_ENVY_TEMP_STATE"
@@ -90,7 +294,8 @@ _prepare_state() {
       ENVY_STATE_FILE="$_ENVY_TEMP_STATE"
       export ENVY_STATE_FILE
     fi
-    nv_state_migrate "$(nv_manifest_file)" "$ENVY_PLATFORM" "$ENVY_SHELL" "$ENVY_ROOT"
+    nv_state_migrate "$(nv_manifest_file)" "$ENVY_PLATFORM" "$ENVY_SHELL" "$ENVY_ROOT" \
+      || return $?
     if [[ "$(nv_state_get platform_hierarchy '""' 2>/dev/null || true)" \
       != "$(nv_platform_hierarchy "$ENVY_PLATFORM")" ]]; then
       nv_state_set platform_hierarchy \
@@ -111,7 +316,7 @@ _prepare_state() {
 }
 
 _ensure_installed() {
-  _prepare_state
+  _prepare_state || return $?
   if ! nv_state_exists || [[ "$(nv_state_get installed false 2>/dev/null || echo false)" != true ]]; then
     echo "envy is not installed for this checkout." >&2
     echo "Run: $ENVY_ROOT/bin/envy install" >&2
@@ -417,6 +622,7 @@ cmd_install() {
     esac
   done
   [[ -z "$preset" || "$preset" == core || "$preset" == recommended ]] || die "Unknown preset: $preset"
+  _require_no_bundle_transaction
   nv_manifest_validate
   nv_detect_platform
   export ENVY_DRY_RUN="$dry_run"
@@ -512,7 +718,10 @@ cmd_upgrade() {
     esac
   done
   export ENVY_DRY_RUN="$dry_run"
-  [[ "$from_install" == true ]] || _ensure_installed || return $?
+  _require_no_bundle_transaction
+  if [[ "$from_install" != true ]]; then
+    _ensure_installed || return $?
+  fi
   _validate_selectors
   _validate_only_enabled
   local targets=()
@@ -762,6 +971,7 @@ cmd_uninstall() {
   done
   export ENVY_DRY_RUN="$dry_run"
   if ! nv_state_exists; then echo "envy is not installed; nothing to remove."; return 0; fi
+  _require_no_bundle_transaction
   _prepare_state
   if [[ "$(nv_state_get installed false)" != true ]]; then echo "envy is not installed; nothing to remove."; return 0; fi
   local targets=() reversed=()
@@ -810,6 +1020,372 @@ cmd_uninstall() {
   (( failed == 0 ))
 }
 
+_bundle_resume_reconcile() {
+  local action bundle phase planned baseline_json feature baseline rc
+  local target_count=0 preexisting=0
+  local candidates=() targets=() reconciled=()
+  action="$(nv_state_get bundle_transaction.action)"
+  bundle="$(nv_state_get bundle_transaction.id)"
+  phase="$(nv_state_get bundle_transaction.phase)"
+  [[ "$phase" == reconciling ]] || die "Bundle '$bundle' is not ready to reconcile"
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$(nv_manifest_file)" new
+  cmd_generate_env
+  planned="$(nv_state_get bundle_transaction.reconcile_planned false)"
+
+  if [[ "$planned" != true ]]; then
+    baseline_json="$(nv_state_get bundle_transaction.baseline '{}')"
+    while IFS= read -r feature; do
+      [[ -n "$feature" ]] || continue
+      nv_feature_exists "$feature" || continue
+      nv_feature_in_scope "$feature" || continue
+      [[ "$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)" == true ]] || continue
+      baseline="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get(sys.argv[2],"unknown"))' \
+        "$baseline_json" "$feature")"
+      _bundle_verify_result "$feature"
+      if [[ "$baseline" == current && "$_ENVY_BUNDLE_VERIFY_RESULT" == drifted ]]; then
+        candidates+=("$feature")
+      elif [[ "$baseline" == drifted ]]; then
+        ((preexisting++)) || true
+      fi
+    done < <(_bundle_state_lines surviving_features)
+
+    while IFS= read -r feature; do
+      [[ -n "$feature" ]] || continue
+      nv_feature_exists "$feature" || continue
+      nv_feature_in_scope "$feature" || continue
+      [[ "$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)" == true ]] || continue
+      _bundle_verify_result "$feature"
+      [[ "$_ENVY_BUNDLE_VERIFY_RESULT" == current ]] || candidates+=("$feature")
+    done < <(_bundle_state_lines forced_features)
+
+    while IFS= read -r feature; do
+      _array_contains "$feature" ${candidates[0]+"${candidates[@]}"} || continue
+      _array_contains "$feature" ${targets[0]+"${targets[@]}"} || targets+=("$feature")
+    done < <(nv_list_features)
+    python3 "$ENVY_ROOT/lib/bundles.py" set-targets "$(nv_state_file)" \
+      ${targets[0]+"${targets[@]}"}
+    (( preexisting == 0 )) \
+      || echo "  Leaving $preexisting pre-existing drifted feature(s) unchanged."
+  fi
+
+  while IFS= read -r feature; do
+    [[ -n "$feature" ]] && reconciled+=("$feature")
+  done < <(_bundle_state_lines reconciled_features)
+  while IFS= read -r feature; do
+    [[ -n "$feature" ]] || continue
+    _array_contains "$feature" ${reconciled[0]+"${reconciled[@]}"} && continue
+    echo "  Reconciling $feature"
+    if ! _feature_dependencies_ready "$feature"; then
+      nv_state_feature_result "$feature" failed "bundle $action dependency is unavailable or drifted"
+      echo "  Dependency for $feature is unavailable or drifted; retry 'envy bundle $action'" >&2
+      return 1
+    fi
+    rc=0
+    ENVY_DRY_RUN=0 nv_run_feature_handler "$feature" converge || rc=$?
+    if [[ $rc -ne 0 && $rc -ne $ENVY_HANDLER_UNAVAILABLE ]]; then
+      nv_state_feature_result "$feature" failed "bundle $action reconciliation failed"
+      echo "  Failed to reconcile $feature; retry 'envy bundle $action'" >&2
+      return 1
+    fi
+    _bundle_verify_result "$feature"
+    if [[ "$_ENVY_BUNDLE_VERIFY_RESULT" == drifted ]]; then
+      nv_state_feature_result "$feature" failed "bundle $action verification failed"
+      echo "  $feature is still drifted; retry 'envy bundle $action'" >&2
+      return 1
+    fi
+    nv_state_feature_result "$feature" current ""
+    nv_state_feature_verify "$feature" "$_ENVY_BUNDLE_VERIFY_RESULT" ""
+    python3 "$ENVY_ROOT/lib/bundles.py" add "$(nv_state_file)" \
+      reconciled_features "$feature"
+    ((target_count++)) || true
+  done < <(_bundle_state_lines reconcile_targets)
+
+  cmd_generate_env
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$(nv_manifest_file)" new
+  python3 "$ENVY_ROOT/lib/bundles.py" clear "$(nv_state_file)"
+  echo "Bundle '$bundle' ${action}ed; reconciled $target_count feature(s)."
+}
+
+_bundle_abort_detach() {
+  local dry_run="$1" bundle feature rc index
+  local departing=() restore=() changed=()
+  bundle="$(nv_state_get bundle_transaction.id)"
+  [[ "$(nv_state_get bundle_transaction.phase)" == removing ]] \
+    || die "Bundle '$bundle' has already crossed the detach commit point; reattach it instead."
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$(nv_manifest_file)" old
+  while IFS= read -r feature; do
+    [[ -n "$feature" ]] && departing+=("$feature")
+  done < <(_bundle_state_lines departing_features)
+  while IFS= read -r feature; do
+    [[ -n "$feature" ]] && changed+=("$feature")
+  done < <(_bundle_state_lines changed_features)
+  for ((index=${#departing[@]}-1; index>=0; index--)); do
+    restore+=("${departing[$index]}")
+  done
+  echo "Aborting detach of '$bundle'; reconverging: ${restore[*]:-none}"
+  [[ "$dry_run" == true ]] && { echo "Dry run: no changes made."; return 0; }
+  for feature in ${restore[0]+"${restore[@]}"}; do
+    nv_feature_in_scope "$feature" || continue
+    rc=0
+    ENVY_DRY_RUN=0 nv_run_feature_handler "$feature" converge || rc=$?
+    if [[ $rc -ne 0 && $rc -ne $ENVY_HANDLER_UNAVAILABLE ]]; then
+      echo "  Failed to reconverge $feature; detach transaction retained" >&2
+      return 1
+    fi
+    if [[ $rc -eq $ENVY_HANDLER_UNAVAILABLE ]]; then
+      if _array_contains "$feature" ${changed[0]+"${changed[@]}"}; then
+        echo "  Cannot restore $feature because its converge handler is unavailable; detach transaction retained" >&2
+        return 1
+      fi
+    else
+      _bundle_verify_result "$feature"
+      [[ "$_ENVY_BUNDLE_VERIFY_RESULT" != drifted ]] || {
+        echo "  $feature remains drifted; detach transaction retained" >&2
+        return 1
+      }
+      nv_state_feature_result "$feature" current ""
+      nv_state_feature_verify "$feature" "$_ENVY_BUNDLE_VERIFY_RESULT" ""
+    fi
+  done
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$(nv_manifest_file)" old
+  python3 "$ENVY_ROOT/lib/bundles.py" clear "$(nv_state_file)" --abort
+  echo "Detach of '$bundle' aborted."
+}
+
+_bundle_resume_attach() {
+  local new_manifest path
+  local paths=()
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$(nv_manifest_file)" old
+  while IFS= read -r -d '' path; do paths+=("$path"); done \
+    < <(python3 "$ENVY_ROOT/lib/bundles.py" resume-attach-paths \
+      "$(nv_state_file)")
+  _bundle_temp_file
+  new_manifest="$_ENVY_BUNDLE_TEMP_RESULT"
+  python3 "$ENVY_ROOT/lib/manifest.py" compose "$ENVY_ROOT/envy.json" \
+    ${paths[0]+"${paths[@]}"} > "$new_manifest"
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$new_manifest" new
+  python3 "$ENVY_ROOT/lib/bundles.py" commit-attach \
+    "$(nv_state_file)" "$new_manifest"
+  _run_fresh_envy bundle attach
+}
+
+_bundle_resume_detach() {
+  local bundle feature rc new_manifest path
+  local paths=() removed=()
+  bundle="$(nv_state_get bundle_transaction.id)"
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$(nv_manifest_file)" old
+  while IFS= read -r feature; do
+    [[ -n "$feature" ]] && removed+=("$feature")
+  done < <(_bundle_state_lines removed_features)
+  while IFS= read -r feature; do
+    [[ -n "$feature" ]] || continue
+    _array_contains "$feature" ${removed[0]+"${removed[@]}"} && continue
+    if ! nv_feature_in_scope "$feature"; then
+      python3 "$ENVY_ROOT/lib/bundles.py" add "$(nv_state_file)" \
+        removed_features "$feature"
+      continue
+    fi
+    echo "  Removing $feature"
+    rc=0
+    ENVY_DRY_RUN=0 ENVY_PURGE=false nv_run_feature_handler "$feature" remove || rc=$?
+    if [[ $rc -ne 0 && $rc -ne $ENVY_HANDLER_UNAVAILABLE ]]; then
+      echo "  Failed to remove $feature; retry 'envy bundle detach $bundle'" >&2
+      return 1
+    fi
+    if [[ $rc -eq 0 ]]; then
+      python3 "$ENVY_ROOT/lib/bundles.py" add "$(nv_state_file)" \
+        changed_features "$feature"
+    fi
+    python3 "$ENVY_ROOT/lib/bundles.py" add "$(nv_state_file)" \
+      removed_features "$feature"
+  done < <(_bundle_state_lines departing_features)
+
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$(nv_manifest_file)" old
+  while IFS= read -r -d '' path; do paths+=("$path"); done \
+    < <(python3 "$ENVY_ROOT/lib/bundles.py" active-paths \
+      "$(nv_manifest_file)" "$bundle")
+  _bundle_temp_file
+  new_manifest="$_ENVY_BUNDLE_TEMP_RESULT"
+  python3 "$ENVY_ROOT/lib/manifest.py" compose "$ENVY_ROOT/envy.json" \
+    ${paths[0]+"${paths[@]}"} > "$new_manifest"
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-manifest \
+    "$(nv_state_file)" "$new_manifest" new
+  python3 "$ENVY_ROOT/lib/bundles.py" commit-detach \
+    "$(nv_state_file)" "$new_manifest"
+  _run_fresh_envy bundle detach "$bundle"
+}
+
+cmd_bundle_detach() {
+  local bundle="${1:-}" dry_run=false abort=false lookup plan new_manifest path
+  local paths=()
+  [[ -n "$bundle" ]] || die "bundle detach requires a bundle ID"
+  shift
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run|-n) dry_run=true; shift ;;
+      --abort) abort=true; shift ;;
+      *) die "Unknown bundle detach option: $1" ;;
+    esac
+  done
+  [[ "$_ENVY_BUNDLES_EXPLICIT" == false ]] \
+    || die "bundle lifecycle commands cannot be combined with --bundle"
+  export ENVY_DRY_RUN="$dry_run"
+  _ensure_installed || return $?
+
+  if _bundle_transaction_pending; then
+    [[ "$(nv_state_get bundle_transaction.action)" == detach \
+      && "$(nv_state_get bundle_transaction.id)" == "$bundle" ]] \
+      || die "Another bundle operation is pending"
+    if [[ "$abort" == true ]]; then
+      _bundle_abort_detach "$dry_run"
+    elif [[ "$(nv_state_get bundle_transaction.phase)" == removing ]]; then
+      [[ "$dry_run" == false ]] \
+        || { echo "Detach of '$bundle' is pending removal; dry run made no changes."; return 0; }
+      _bundle_resume_detach
+    else
+      [[ "$dry_run" == false ]] \
+        || { echo "Detach of '$bundle' is pending reconciliation; dry run made no changes."; return 0; }
+      _bundle_resume_reconcile
+    fi
+    return
+  fi
+  [[ "$abort" == false ]] || die "No detach transaction is pending for '$bundle'"
+
+  lookup="$(python3 "$ENVY_ROOT/lib/bundles.py" lookup "$(nv_state_file)" "$bundle")"
+  if [[ "$lookup" == detached ]]; then
+    echo "Bundle '$bundle' is already detached."
+    return 0
+  fi
+  [[ "$lookup" == active ]] || die "Unknown active bundle: $bundle"
+  while IFS= read -r -d '' path; do paths+=("$path"); done \
+    < <(python3 "$ENVY_ROOT/lib/bundles.py" active-paths \
+      "$(nv_manifest_file)" "$bundle")
+  _bundle_temp_file
+  new_manifest="$_ENVY_BUNDLE_TEMP_RESULT"
+  python3 "$ENVY_ROOT/lib/manifest.py" compose "$ENVY_ROOT/envy.json" \
+    ${paths[0]+"${paths[@]}"} > "$new_manifest"
+  _bundle_temp_file
+  plan="$_ENVY_BUNDLE_TEMP_RESULT"
+  python3 "$ENVY_ROOT/lib/bundles.py" plan-detach "$(nv_manifest_file)" \
+    "$(nv_state_file)" "$bundle" "$new_manifest" "$plan" \
+    $(nv_platform_hierarchy "$ENVY_PLATFORM")
+  _bundle_capture_baseline "$plan"
+  _bundle_print_plan "$plan"
+  if [[ "$dry_run" == true ]]; then
+    echo "Dry run: no changes made."
+    return 0
+  fi
+  python3 "$ENVY_ROOT/lib/bundles.py" start "$(nv_state_file)" "$plan"
+  _bundle_resume_detach
+}
+
+cmd_bundle_attach() {
+  local raw_path="${1:-}" dry_run=false id new_manifest plan item hierarchy
+  local items=() paths=()
+  [[ -z "$raw_path" || "$raw_path" != -* ]] || raw_path=""
+  [[ -z "$raw_path" ]] || shift
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run|-n) dry_run=true; shift ;;
+      *) die "Unknown bundle attach option: $1" ;;
+    esac
+  done
+  [[ "$_ENVY_BUNDLES_EXPLICIT" == false ]] \
+    || die "bundle lifecycle commands cannot be combined with --bundle"
+  export ENVY_DRY_RUN="$dry_run"
+  _ensure_installed || return $?
+
+  if _bundle_transaction_pending; then
+    [[ "$(nv_state_get bundle_transaction.action)" == attach ]] \
+      || die "Another bundle operation is pending"
+    [[ "$dry_run" == false ]] \
+      || { echo "Bundle attach is pending; dry run made no changes."; return 0; }
+    if [[ "$(nv_state_get bundle_transaction.phase)" == attaching ]]; then
+      _bundle_resume_attach
+    else
+      _bundle_resume_reconcile
+    fi
+    return
+  fi
+  [[ -n "$raw_path" ]] || die "bundle attach requires a bundle path"
+  while IFS= read -r -d '' item; do items+=("$item"); done \
+    < <(python3 "$ENVY_ROOT/lib/bundles.py" attach-paths \
+      "$(nv_manifest_file)" "$(nv_state_file)" "$raw_path")
+  [[ -n "${items[0]+set}" ]] || die "Could not resolve bundle: $raw_path"
+  id="${items[0]}"
+  paths=("${items[@]:1}")
+  _bundle_temp_file
+  new_manifest="$_ENVY_BUNDLE_TEMP_RESULT"
+  python3 "$ENVY_ROOT/lib/manifest.py" compose "$ENVY_ROOT/envy.json" \
+    ${paths[0]+"${paths[@]}"} > "$new_manifest"
+  _bundle_temp_file
+  plan="$_ENVY_BUNDLE_TEMP_RESULT"
+  hierarchy="$(_bundle_manifest_hierarchy "$new_manifest")"
+  python3 "$ENVY_ROOT/lib/bundles.py" plan-attach "$(nv_manifest_file)" \
+    "$(nv_state_file)" "$new_manifest" "$id" "$plan" $hierarchy
+  _bundle_capture_baseline "$plan"
+  python3 "$ENVY_ROOT/lib/bundles.py" validate-attach-plan "$plan" \
+    "$new_manifest" $hierarchy
+  _bundle_print_plan "$plan"
+  if [[ "$dry_run" == true ]]; then
+    echo "Dry run: no changes made."
+    return 0
+  fi
+  python3 "$ENVY_ROOT/lib/bundles.py" start "$(nv_state_file)" "$plan"
+  _bundle_resume_attach
+}
+
+cmd_bundle_forget() {
+  local bundle="${1:-}" dry_run=false pending_id=""
+  [[ -n "$bundle" ]] || die "bundle forget requires a bundle ID"
+  shift
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run|-n) dry_run=true; shift ;;
+      *) die "Unknown bundle forget option: $1" ;;
+    esac
+  done
+  [[ "$_ENVY_BUNDLES_EXPLICIT" == false ]] \
+    || die "bundle lifecycle commands cannot be combined with --bundle"
+  nv_state_exists || die "envy is not installed; nothing to forget"
+  [[ "$(nv_state_get installed false)" == true ]] || die "envy is not installed"
+  if _bundle_transaction_pending; then
+    pending_id="$(nv_state_get bundle_transaction.id)"
+    [[ "$pending_id" == "$bundle" ]] || die "Another bundle operation is pending"
+  fi
+  echo "WARNING: forgetting '$bundle' skips its removal handlers and may leave managed resources behind."
+  if [[ "$dry_run" == true ]]; then
+    echo "Dry run: no changes made."
+    return 0
+  fi
+  python3 "$ENVY_ROOT/lib/bundles.py" forget "$(nv_state_file)" \
+    "$(nv_manifest_file)" "$bundle"
+  cmd_generate_env
+  echo "Bundle '$bundle' forgotten; run 'envy verify' to inspect remaining drift."
+}
+
+cmd_bundle() {
+  local action="${1:-help}"
+  shift 2>/dev/null || true
+  case "$action" in
+    attach) cmd_bundle_attach "$@" ;;
+    detach) cmd_bundle_detach "$@" ;;
+    forget) cmd_bundle_forget "$@" ;;
+    help|--help|-h)
+      echo "usage: envy bundle {attach PATH|detach ID [--abort]|forget ID} [--dry-run]"
+      ;;
+    *) die "Unknown bundle command: $action" ;;
+  esac
+}
+
 cmd_secrets() {
   local action="${1:-help}"
   if [[ "$action" == help || "$action" == --help || "$action" == -h ]]; then
@@ -820,6 +1396,7 @@ cmd_secrets() {
     python3 "$ENVY_ROOT/features/secrets.py" "$action" "${2}"
     return
   fi
+  _require_no_bundle_transaction
   _ensure_installed || return $?
   nv_feature_exists secrets || die "This installation does not provide the secrets feature"
   nv_feature_in_scope secrets || die "The secrets feature is unavailable on this platform"
@@ -829,6 +1406,7 @@ cmd_secrets() {
     _feature_dependencies_ready secrets \
       || die "The secrets feature is not initialized; run 'envy upgrade --only chezmoi,mise --force' and retry"
   fi
+  _state_lock_release
   python3 "$ENVY_ROOT/features/secrets.py" "$@"
 }
 
@@ -839,7 +1417,14 @@ cmd_remote() {
       python3 "$ENVY_ROOT/lib/remote.py" --help
       return
       ;;
-    open|status|doctor)
+    open)
+      _require_no_bundle_transaction
+      _state_lock_release
+      python3 "$ENVY_ROOT/lib/remote.py" "$@"
+      return
+      ;;
+    status|doctor)
+      _state_lock_release
       python3 "$ENVY_ROOT/lib/remote.py" "$@"
       return
       ;;
@@ -848,6 +1433,7 @@ cmd_remote() {
     _doctor) internal=doctor ;;
     *) die "Unknown remote command: $action. Run 'envy remote --help'." ;;
   esac
+  _require_no_bundle_transaction
   _ensure_installed || return $?
   nv_feature_exists remote-development \
     || die "This installation does not provide the remote-development feature"
@@ -856,6 +1442,7 @@ cmd_remote() {
   [[ "$(nv_state_feature_get remote-development enabled false 2>/dev/null || echo false)" == true ]] \
     || die "The remote-development feature is not installed; run 'envy install --reconfigure' and enable it first"
   shift
+  _state_lock_release
   python3 "$ENVY_ROOT/features/remote-development.py" "$internal" "$@"
 }
 
@@ -874,6 +1461,9 @@ Commands:
   status [--json]
   verify [--only/-o FEATURES | --except/-e FEATURES] [--json]
   doctor [all|features|network|shell|state|FEATURE...] [--verbose] [--json]
+  bundle attach PATH [--dry-run]
+  bundle detach ID [--dry-run] [--abort]
+  bundle forget ID [--dry-run]
   remote open HOST [PATH] [--no-browser] [--local-port PORT]
   remote {status|doctor} HOST
   secrets {push-key|pull-key} HOST [--force] [--yes] [--restore]
@@ -898,10 +1488,11 @@ main() {
     status) cmd_status "$@" ;;
     verify) cmd_verify "$@" ;;
     doctor) cmd_doctor "$@" ;;
+    bundle) cmd_bundle "$@" ;;
     remote) cmd_remote "$@" ;;
     secrets) cmd_secrets "$@" ;;
     uninstall) cmd_uninstall "$@" ;;
-    generate-env) _ensure_installed && cmd_generate_env ;;
+    generate-env) _require_no_bundle_transaction && _ensure_installed && cmd_generate_env ;;
     help|--help|-h) cmd_help ;;
     *) die "Unknown command: $command. Run 'envy help'." ;;
   esac

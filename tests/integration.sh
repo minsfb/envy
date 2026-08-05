@@ -79,6 +79,7 @@ run_cli() {
 
 run_cli install --preset core --dry-run >"$SANDBOX/dry-run.out"
 assert_not_file "$HOME_DIR/.config/envy/state.json"
+assert_not_file "$HOME_DIR/.config/envy"
 
 run_cli install --preset core >"$SANDBOX/install.out"
 STATE="$HOME_DIR/.config/envy/state.json"

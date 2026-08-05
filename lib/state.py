@@ -126,6 +126,12 @@ def new_state(
         "preset": preset,
         "manifest_fingerprint": manifest_fingerprint(manifest_path),
         "bundles": bundle_state(manifest),
+        "bundle_order": [
+            item["id"]
+            for item in manifest.get("bundles", [])
+            if isinstance(item, dict) and not item.get("core") and item.get("id")
+        ],
+        "detached_bundles": [],
         "features": {},
         "detached_features": {},
         "ownership": {},
@@ -193,6 +199,31 @@ def migrate_v3(
         detached = {}
         state["detached_features"] = detached
         changed = True
+    detached_bundles = state.get("detached_bundles")
+    if not isinstance(detached_bundles, list):
+        state["detached_bundles"] = []
+        changed = True
+    bundle_order = state.get("bundle_order")
+    if not isinstance(bundle_order, list) or not all(
+        isinstance(item, str) for item in bundle_order
+    ):
+        bundle_order = []
+        state["bundle_order"] = bundle_order
+        changed = True
+    known_ids = [
+        item["id"]
+        for item in state.get("bundles", [])
+        if isinstance(item, dict) and not item.get("core") and item.get("id")
+    ]
+    known_ids.extend(
+        item["id"]
+        for item in state.get("detached_bundles", [])
+        if isinstance(item, dict) and item.get("id")
+    )
+    for bundle_id in known_ids:
+        if bundle_id not in bundle_order:
+            bundle_order.append(bundle_id)
+            changed = True
     changed = apply_aliases(features, manifest.get("aliases", {})) or changed
     changed = apply_aliases(detached, manifest.get("aliases", {})) or changed
     facts = {
@@ -212,7 +243,10 @@ def migrate_v3(
     for name, definition in definitions.items():
         feature = features.get(name)
         historical = detached.get(name)
-        if isinstance(historical, dict) and (
+        historical_matches = isinstance(historical, dict) and historical.get(
+            "origin"
+        ) in {None, definition.get("_origin", "envy-core")}
+        if historical_matches and (
             not isinstance(feature, dict)
             or not feature.get("selection_explicit")
             or (historical.get("enabled") and not feature.get("enabled"))
@@ -220,7 +254,7 @@ def migrate_v3(
             feature = detached.pop(name)
             features[name] = feature
             changed = True
-        elif isinstance(historical, dict):
+        elif historical_matches:
             detached.pop(name)
             changed = True
         if not isinstance(feature, dict):

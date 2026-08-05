@@ -55,6 +55,33 @@ feature origins, and order are stored in state. Subsequent launcher invocations
 reuse those recorded paths. Duplicate feature IDs, resource paths, environment
 values, or recommended selections fail before any handler runs.
 
+Use the lifecycle commands to change that persisted set:
+
+```bash
+envy bundle detach team-tools
+envy bundle attach /path/to/team-bundle
+```
+
+Detach runs enabled bundle removal handlers in reverse dependency order without
+purging user data. It journals each phase, so repeating the command resumes an
+interrupted operation and detaching an already detached bundle is a no-op.
+The journal pins the composed manifests and referenced package content; source
+changes during an interrupted operation must be restored before resuming (or
+explicitly abandoned with `bundle forget`).
+`envy bundle detach ID --abort` reconverges the original bundle features before
+the manifest commit point; after that point, attach is the reversal. Attach
+restores the bundle's prior order and enabled feature selections. Both commands
+reconcile only surviving features that were current before the bundle change
+and became drifted because of it; unrelated pre-existing drift is left alone.
+
+While a lifecycle transaction is pending, status, verify, and doctor remain
+available, but other mutating commands refuse to run. `--dry-run` prints a plan
+without writing state. `envy bundle forget ID` is a separate unsafe escape hatch
+that discards bundle metadata, saved selections, and feature history while
+skipping removal handlers; it warns because owned resources may remain behind.
+After installation, `--bundle` may repeat the already recorded bundle set but
+cannot add, omit, reorder, or replace it; use the lifecycle commands instead.
+
 A portable bundle sets `"portable": true`. Its handlers, fact provider,
 resources, and feature PATH entries must remain inside its package root. A
 structured `facts` provider may report a host platform hierarchy and ephemeral
@@ -385,8 +412,9 @@ check.
 | `~/.local/state/envy/` | Logs, backups, merge bases, agent metadata, and ownership ledgers |
 | `~/.local/share/envy/chezmoi-source` | Composed, non-overlapping Chezmoi working tree |
 
-Removed bundles are retained as detached feature state so reattaching a bundle
-does not silently lose prior optional selections.
+Detached bundles retain their metadata, order, and feature state so reattaching
+does not silently lose prior optional selections. An in-progress attach or
+detach is also journaled in this file and is visible in `envy status`.
 
 ## Development
 
@@ -414,9 +442,10 @@ dependencies, environment values, and structured lifecycle handlers:
 ```
 
 Handlers run from their owning package root with `ENVY_FEATURE` and
-`ENVY_FEATURE_ROOT` set. Convergence must be idempotent, verification must be
-read-only, diagnosis should explain actionable drift, and removal must delete
-only owned state while honoring `ENVY_DRY_RUN` and `ENVY_PURGE`.
+`ENVY_FEATURE_ROOT` set. Convergence and non-purge removal must be idempotent
+because interrupted bundle transactions may retry a handler. Verification must
+be read-only, diagnosis should explain actionable drift, and removal must
+delete only owned state while honoring `ENVY_DRY_RUN` and `ENVY_PURGE`.
 
 Add non-core defaults to `recommended_features` when the recommended preset
 should select them. Document the feature in the table above and add a focused
@@ -482,6 +511,7 @@ tests/tmux-persistence.sh
 tests/agent-assets.sh
 tests/shell-smoke.sh
 tests/agent-guidance.sh
+tests/bundle-lifecycle.sh
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 

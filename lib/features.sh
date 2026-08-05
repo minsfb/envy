@@ -11,6 +11,8 @@ _ENVY_MANIFEST_PY="$ENVY_ROOT/lib/manifest.py"
 _ENVY_FACTS_PY="$ENVY_ROOT/lib/facts.py"
 _ENVY_JSON=""
 _ENVY_MANIFEST_TEMP=""
+_ENVY_MANIFEST_EXPORT_KEYS=()
+_ENVY_FACT_EXPORT_KEYS=()
 readonly ENVY_HANDLER_UNAVAILABLE=125
 export ENVY_ROOT ENVY_DIR
 
@@ -26,6 +28,8 @@ _nv_py_manifest() {
 nv_manifest_init() {
   local key value facts_file facts_valid=true
   local bundles=("$@")
+  _ENVY_MANIFEST_EXPORT_KEYS=()
+  _ENVY_FACT_EXPORT_KEYS=()
   _ENVY_MANIFEST_TEMP="$(mktemp "${TMPDIR:-/tmp}/envy-manifest.json.XXXXXX")"
   python3 "$_ENVY_MANIFEST_PY" compose "$_ENVY_CORE_JSON" ${bundles[0]+"${bundles[@]}"} > "$_ENVY_MANIFEST_TEMP" || {
     rm -f "$_ENVY_MANIFEST_TEMP"
@@ -43,6 +47,7 @@ nv_manifest_init() {
     }
     printf -v "$key" '%s' "$value"
     export "${key?}"
+    _ENVY_MANIFEST_EXPORT_KEYS+=("$key")
   done < <(python3 "$_ENVY_MANIFEST_PY" environment "$_ENVY_JSON")
   facts_file="$(mktemp "${TMPDIR:-/tmp}/envy-facts.XXXXXX")"
   if ! python3 "$_ENVY_FACTS_PY" "$_ENVY_JSON" > "$facts_file"; then
@@ -57,6 +62,7 @@ nv_manifest_init() {
     }
     printf -v "$key" '%s' "$value"
     export "${key?}"
+    _ENVY_FACT_EXPORT_KEYS+=("$key")
   done < "$facts_file"
   rm -f "$facts_file"
   [[ "$facts_valid" == true ]] || return 1

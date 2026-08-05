@@ -3,7 +3,8 @@
 Changes should preserve the lifecycle and ownership contracts documented in the
 README:
 
-- handlers are idempotent and have non-mutating verification;
+- converge and non-purge remove handlers are idempotent and verification is
+  non-mutating, so journaled bundle operations can safely resume;
 - manifests use structured commands and explicit bundles;
 - removal touches only recorded envy-owned resources;
 - dry-run is mutation-free;

@@ -11,7 +11,8 @@ nv_platform_hierarchy() {
     echo "$ENVY_PLATFORM_HIERARCHY_OVERRIDE"
     return
   fi
-  if [[ -n "${ENVY_PLATFORM_HIERARCHY:-}" ]] \
+  if [[ -z "${ENVY_PLATFORM_OVERRIDE:-}" \
+    && -n "${ENVY_PLATFORM_HIERARCHY:-}" ]] \
     && [[ "$platform" == "${ENVY_PLATFORM:-$platform}" ]]; then
     echo "$ENVY_PLATFORM_HIERARCHY"
     return
