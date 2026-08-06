@@ -7,11 +7,14 @@ import hashlib
 import os
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 
 PREFIX = "envy-rd-"
+WORKSPACE_OPTION = "@envy_remote_workspace"
+WORKSPACE_SCHEMA_OPTION = "@envy_remote_workspace_schema"
 
 
 class TerminalError(RuntimeError):
@@ -46,13 +49,88 @@ def tmux_command(workspace: Path, executable: str | None = None) -> list[str]:
         raise TerminalError("tmux is unavailable; reconverge the terminal feature")
     return [
         command,
-        "new-session",
-        "-A",
-        "-s",
-        session_name(workspace),
-        "-c",
-        str(workspace),
+        "attach-session",
+        "-t",
+        f"={session_name(workspace)}",
     ]
+
+
+def tmux_run(command: list[str], *, output: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE if output else subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def tmux_value(command: str, target: str, name: str, executable: str) -> str | None:
+    if command == "display-message":
+        arguments = [executable, command, "-p", "-t", target, name]
+    else:
+        arguments = [executable, command, "-qv", "-t", target, name]
+    result = tmux_run(arguments, output=True)
+    if result.returncode != 0:
+        return None
+    value = result.stdout.rstrip("\n")
+    return value if value else None
+
+
+def prepare_session(workspace: Path, executable: str | None = None) -> list[str]:
+    command = executable or shutil.which("tmux")
+    if not command:
+        raise TerminalError("tmux is unavailable; reconverge the terminal feature")
+    name = session_name(workspace)
+    target = f"={name}"
+    exists = tmux_run([command, "has-session", "-t", target]).returncode == 0
+    if not exists:
+        created = tmux_run(
+            [command, "new-session", "-d", "-s", name, "-c", str(workspace)]
+        )
+        if created.returncode != 0 and tmux_run(
+            [command, "has-session", "-t", target]
+        ).returncode != 0:
+            raise TerminalError(f"could not create tmux session: {name}")
+
+    raw_session_path = tmux_value(
+        "display-message", target, "#{session_path}", command
+    )
+    try:
+        actual_path = (
+            Path(raw_session_path).resolve(strict=True) if raw_session_path else None
+        )
+    except OSError as error:
+        raise TerminalError(f"cannot validate tmux session workspace: {name}") from error
+    if actual_path != workspace:
+        raise TerminalError(
+            f"refusing to claim tmux session with a different workspace: {name}"
+        )
+
+    schema = tmux_value("show-options", target, WORKSPACE_SCHEMA_OPTION, command)
+    recorded = tmux_value("show-options", target, WORKSPACE_OPTION, command)
+    if recorded is not None:
+        try:
+            recorded_path = Path(recorded).resolve(strict=True)
+        except OSError as error:
+            raise TerminalError(f"tmux session workspace metadata is invalid: {name}") from error
+        if recorded_path != workspace:
+            raise TerminalError(f"tmux session workspace metadata conflicts: {name}")
+    if schema not in {None, "1"} or (schema == "1" and recorded is None):
+        raise TerminalError(f"tmux session workspace metadata conflicts: {name}")
+    if recorded is None:
+        result = tmux_run(
+            [command, "set-option", "-t", target, WORKSPACE_OPTION, str(workspace)]
+        )
+        if result.returncode != 0:
+            raise TerminalError(f"could not record tmux session workspace: {name}")
+    if schema is None:
+        result = tmux_run(
+            [command, "set-option", "-t", target, WORKSPACE_SCHEMA_OPTION, "1"]
+        )
+        if result.returncode != 0:
+            raise TerminalError(f"could not record tmux session workspace: {name}")
+    return tmux_command(workspace, command)
 
 
 def main() -> int:
@@ -61,7 +139,7 @@ def main() -> int:
         return 2
     try:
         workspace = resolve_workspace(sys.argv[1] if len(sys.argv) == 2 else None)
-        command = tmux_command(workspace)
+        command = prepare_session(workspace)
         os.execv(command[0], command)
     except TerminalError as error:
         print(f"nv-remote-terminal: {error}", file=sys.stderr)

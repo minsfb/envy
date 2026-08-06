@@ -3,12 +3,17 @@
 
 from __future__ import annotations
 
+import base64
 import fcntl
 import hashlib
 import json
 import os
+import pwd
+import re
+import secrets
 import shutil
 import signal
+import socket
 import stat
 import subprocess
 import sys
@@ -40,6 +45,17 @@ LEASES = STATE / "leases"
 LOG = STATE / "code-server.log"
 STOP = STATE / "stop.json"
 MARKER = STATE / "configured.json"
+ORIGIN_ROOT = Path("/tmp") / f"envy-origin-{os.getuid()}"
+ORIGIN_SUFFIX = ".sock"
+ORIGIN_TOKEN = re.compile(r"^[0-9a-f]{32}$")
+ORIGIN_SELECTOR = re.compile(r"^[0-9a-f]{8,32}$")
+ORIGIN_LIMIT = 65536
+# The origin response covers a cold 30-second editor start plus up to ten
+# two-second local-forward attempts, with additional protocol/dispatch margin.
+ORIGIN_EDITOR_STARTUP_TIMEOUT = 30.0
+ORIGIN_FORWARD_SETUP_TIMEOUT = 20.0
+ORIGIN_TIMEOUT = 60.0
+ORIGIN_STALE_AGE = 300.0
 _STARTED_PROCESSES: dict[int, subprocess.Popen[bytes]] = {}
 
 
@@ -61,6 +77,396 @@ def runtime_dir() -> Path:
 
 def socket_path() -> Path:
     return runtime_dir() / "code-server.sock"
+
+
+def validate_origin_token(token: str) -> str:
+    if not ORIGIN_TOKEN.fullmatch(token):
+        raise RemoteError("invalid remote origin token")
+    return token
+
+
+def origin_socket_path(token: str) -> Path:
+    return ORIGIN_ROOT / f"{validate_origin_token(token)}{ORIGIN_SUFFIX}"
+
+
+def token_from_origin_socket(path: Path) -> str:
+    if path.parent != ORIGIN_ROOT:
+        raise RemoteError(f"remote origin socket is outside {ORIGIN_ROOT}: {path}")
+    name = path.name
+    if not name.endswith(ORIGIN_SUFFIX):
+        raise RemoteError(f"remote origin socket has an invalid name: {path}")
+    return validate_origin_token(name[: -len(ORIGIN_SUFFIX)])
+
+
+def origin_root_is_private() -> bool:
+    try:
+        metadata = ORIGIN_ROOT.lstat()
+    except OSError:
+        return False
+    return (
+        stat.S_ISDIR(metadata.st_mode)
+        and not ORIGIN_ROOT.is_symlink()
+        and metadata.st_uid == os.getuid()
+        and stat.S_IMODE(metadata.st_mode) == 0o700
+    )
+
+
+def prepare_origin(token: str) -> int:
+    validate_origin_token(token)
+    created = False
+    try:
+        ORIGIN_ROOT.mkdir(mode=0o700)
+        created = True
+    except FileExistsError:
+        pass
+    if created:
+        ORIGIN_ROOT.chmod(0o700)
+    if not origin_root_is_private():
+        raise RemoteError(f"remote origin directory is not private: {ORIGIN_ROOT}")
+    clean_stale_origin_sockets()
+    path = origin_socket_path(token)
+    if os.path.lexists(path):
+        if not origin_socket_is_private(path):
+            raise RemoteError(f"refusing to replace an unsafe origin route: {path}")
+        if origin_socket_is_live(path):
+            raise RemoteError(f"remote origin route is already active: {path}")
+        path.unlink()
+    print(
+        json.dumps(
+            {"version": 1, "type": "origin-ready", "socket": str(path)},
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def cleanup_origin(token: str) -> int:
+    path = origin_socket_path(token)
+    if not os.path.lexists(path):
+        if origin_root_is_private():
+            try:
+                ORIGIN_ROOT.rmdir()
+            except OSError:
+                pass
+        return 0
+    if not origin_socket_is_private(path):
+        raise RemoteError(f"refusing to remove an unsafe origin route: {path}")
+    if origin_socket_is_live(path):
+        raise RemoteError(f"refusing to remove an active origin route: {path}")
+    path.unlink()
+    try:
+        ORIGIN_ROOT.rmdir()
+    except OSError:
+        pass
+    return 0
+
+
+def origin_socket_is_private(path: Path) -> bool:
+    if not origin_root_is_private():
+        return False
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return False
+    return (
+        stat.S_ISSOCK(metadata.st_mode)
+        and metadata.st_uid == os.getuid()
+        and stat.S_IMODE(metadata.st_mode) == 0o600
+    )
+
+
+def origin_socket_is_live(path: Path) -> bool:
+    if not origin_socket_is_private(path):
+        return False
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        probe.settimeout(0.25)
+        probe.connect(str(path))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
+
+
+def clean_stale_origin_sockets() -> list[Path]:
+    """Remove only unchanged, owned callback sockets proven inactive."""
+    if not origin_root_is_private():
+        return []
+    removed: list[Path] = []
+    try:
+        candidates = sorted(ORIGIN_ROOT.iterdir())
+    except OSError as error:
+        raise RemoteError(f"cannot inspect remote origin routes: {error}") from error
+    for path in candidates:
+        try:
+            token_from_origin_socket(path)
+        except RemoteError:
+            continue
+        if not origin_socket_is_private(path):
+            continue
+        try:
+            before = path.lstat()
+        except FileNotFoundError:
+            continue
+        if time.time() - before.st_mtime < ORIGIN_STALE_AGE:
+            continue
+        if origin_socket_is_live(path):
+            continue
+        try:
+            after = path.lstat()
+        except FileNotFoundError:
+            continue
+        if (
+            before.st_dev != after.st_dev
+            or before.st_ino != after.st_ino
+            or not origin_socket_is_private(path)
+        ):
+            continue
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise RemoteError(f"cannot remove stale remote origin route: {path}") from error
+        removed.append(path)
+    return removed
+
+
+def live_origin_sockets(prefix: str = "") -> list[Path]:
+    if not origin_root_is_private():
+        return []
+    candidates: list[Path] = []
+    try:
+        paths_to_check = sorted(ORIGIN_ROOT.glob(f"{prefix}*{ORIGIN_SUFFIX}"))
+    except OSError as error:
+        raise RemoteError(f"cannot inspect remote origin routes: {error}") from error
+    for path in paths_to_check:
+        try:
+            token_from_origin_socket(path)
+        except RemoteError:
+            continue
+        if origin_socket_is_live(path):
+            candidates.append(path)
+    return candidates
+
+
+def origin_route_labels(paths: list[Path]) -> list[str]:
+    tokens = [token_from_origin_socket(path) for path in paths]
+    labels: list[str] = []
+    for token in tokens:
+        for length in range(8, 33):
+            prefix = token[:length]
+            if sum(candidate.startswith(prefix) for candidate in tokens) == 1:
+                labels.append(prefix)
+                break
+    return labels
+
+
+def selected_origin_socket(via: str | None = None) -> Path:
+    if via is not None:
+        if not ORIGIN_SELECTOR.fullmatch(via):
+            raise RemoteError("remote origin selector must be 8 to 32 lowercase hex characters")
+        matches = live_origin_sockets(via)
+        if not matches:
+            raise RemoteError(f"selected remote origin route is not active: {via}")
+        if len(matches) != 1:
+            raise RemoteError(f"remote origin selector is ambiguous: {via}")
+        return matches[0]
+
+    configured = os.environ.get("ENVY_REMOTE_ORIGIN_SOCKET")
+    configured_token = os.environ.get("ENVY_REMOTE_ORIGIN_TOKEN")
+    inside_tmux = bool(os.environ.get("TMUX") or os.environ.get("TMUX_PANE"))
+    if configured and not inside_tmux:
+        path = Path(configured)
+        token = token_from_origin_socket(path)
+        if configured_token and validate_origin_token(configured_token) != token:
+            raise RemoteError("remote origin token does not match its socket")
+        if not origin_socket_is_live(path):
+            raise RemoteError(f"remote origin route is no longer active: {path}")
+        return path
+
+    candidates = live_origin_sockets()
+    if not candidates:
+        raise RemoteError(
+            "no active remote origin route; start an origin-enabled remote shell first"
+        )
+    if len(candidates) != 1:
+        tokens = ", ".join(origin_route_labels(candidates))
+        if inside_tmux:
+            raise RemoteError(
+                "multiple active remote origin routes; persistent tmux ignores "
+                "inherited origin and transport hints; select both explicitly with "
+                "'envy remote editor --origin --transport ssh --via ROUTE' "
+                f"({tokens})"
+            )
+        raise RemoteError(
+            "multiple active remote origin routes; run from the originating shell "
+            "or select one with 'envy remote editor --origin --via ROUTE' "
+            f"({tokens})"
+        )
+    return candidates[0]
+
+
+def canonical_directory(raw: str, label: str) -> Path:
+    if (
+        not raw
+        or any(ord(character) < 32 or ord(character) == 127 for character in raw)
+        or len(os.fsencode(raw)) > 16384
+    ):
+        raise RemoteError(f"{label} requires a valid directory path")
+    try:
+        path = Path(raw).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise RemoteError(f"cannot resolve {label} directory: {raw}") from error
+    if not path.is_dir():
+        raise RemoteError(f"{label} path is not a directory: {path}")
+    return path
+
+
+def tmux_value(arguments: list[str]) -> str | None:
+    command = shutil.which("tmux")
+    pane = os.environ.get("TMUX_PANE")
+    if not command or not pane:
+        return None
+    result = subprocess.run(
+        [command, *arguments],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        return None
+    value = result.stdout.rstrip("\n")
+    if not value or any(ord(character) < 32 for character in value):
+        return None
+    return value
+
+
+def editor_directory(raw: str | None) -> Path:
+    if raw is not None:
+        return canonical_directory(raw, "remote editor")
+    pane = os.environ.get("TMUX_PANE")
+    if pane:
+        session = tmux_value(["display-message", "-p", "-t", pane, "#{session_id}"])
+        if session:
+            schema = tmux_value(
+                ["show-options", "-qv", "-t", session, "@envy_remote_workspace_schema"]
+            )
+            workspace = tmux_value(
+                ["show-options", "-qv", "-t", session, "@envy_remote_workspace"]
+            )
+            if schema is not None or workspace is not None:
+                if schema != "1" or not workspace:
+                    raise RemoteError("managed tmux workspace metadata is invalid")
+                return canonical_directory(workspace, "managed tmux workspace")
+        pane_path = tmux_value(
+            ["display-message", "-p", "-t", pane, "#{pane_current_path}"]
+        )
+        if pane_path:
+            return canonical_directory(pane_path, "tmux pane")
+    return canonical_directory(os.getcwd(), "current working")
+
+
+def decode_origin_cwd(encoded: str | None) -> Path:
+    if encoded in {None, "-"}:
+        return canonical_directory(str(Path.home()), "origin shell")
+    if not encoded or len(encoded) > 21848 or any(character.isspace() for character in encoded):
+        raise RemoteError("invalid encoded origin shell directory")
+    try:
+        padding = "=" * (-len(encoded) % 4)
+        raw = base64.b64decode(encoded + padding, altchars=b"-_", validate=True).decode(
+            "utf-8"
+        )
+    except (ValueError, UnicodeDecodeError) as error:
+        raise RemoteError("invalid encoded origin shell directory") from error
+    return canonical_directory(raw, "origin shell")
+
+
+def origin_shell(token: str, encoded_cwd: str | None = None) -> int:
+    path = origin_socket_path(token)
+    if not origin_socket_is_live(path):
+        raise RemoteError(f"remote origin route is unavailable or not private: {path}")
+    cwd = decode_origin_cwd(encoded_cwd)
+    try:
+        shell = Path(pwd.getpwuid(os.getuid()).pw_shell or "/bin/sh")
+    except KeyError:
+        shell = Path("/bin/sh")
+    if not shell.is_absolute() or not os.access(shell, os.X_OK):
+        raise RemoteError(f"login shell is unavailable: {shell}")
+    environment = os.environ.copy()
+    environment["ENVY_REMOTE_ORIGIN_SOCKET"] = str(path)
+    environment["ENVY_REMOTE_ORIGIN_TOKEN"] = token
+    environment["ENVY_REMOTE_ORIGIN_TRANSPORT"] = "ssh"
+    os.chdir(cwd)
+    os.execvpe(str(shell), [f"-{shell.name}"], environment)
+    return 0
+
+
+def read_origin_response(connection: socket.socket) -> dict[str, Any]:
+    received = bytearray()
+    while b"\n" not in received:
+        block = connection.recv(min(4096, ORIGIN_LIMIT + 1 - len(received)))
+        if not block:
+            break
+        received.extend(block)
+        if len(received) > ORIGIN_LIMIT:
+            raise RemoteError("remote origin response exceeded the size limit")
+    line, separator, _remainder = bytes(received).partition(b"\n")
+    if not separator or not line:
+        raise RemoteError("remote origin returned an incomplete response")
+    try:
+        value = json.loads(line)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RemoteError("remote origin returned invalid JSON") from error
+    if not isinstance(value, dict):
+        raise RemoteError("remote origin returned an invalid response")
+    return value
+
+
+def origin_editor(raw_path: str | None = None, via: str | None = None) -> int:
+    project = editor_directory(raw_path)
+    route = selected_origin_socket(via)
+    request_id = secrets.token_hex(16)
+    request = {
+        "version": 1,
+        "type": "editor",
+        "request_id": request_id,
+        "path": str(project),
+    }
+    encoded = json.dumps(request, separators=(",", ":")).encode("utf-8") + b"\n"
+    if len(encoded) > ORIGIN_LIMIT:
+        raise RemoteError("remote origin request exceeded the size limit")
+    connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        connection.settimeout(ORIGIN_TIMEOUT)
+        connection.connect(str(route))
+        connection.sendall(encoded)
+        response = read_origin_response(connection)
+    except (OSError, TimeoutError) as error:
+        raise RemoteError(f"remote origin route failed: {route}: {error}") from error
+    finally:
+        connection.close()
+    if (
+        response.get("version") != 1
+        or response.get("type") != "editor-result"
+        or response.get("request_id") != request_id
+        or not isinstance(response.get("ok"), bool)
+    ):
+        raise RemoteError("remote origin returned a mismatched response")
+    if not response["ok"]:
+        detail = response.get("error")
+        if (
+            not isinstance(detail, str)
+            or not detail
+            or len(detail) > 1024
+            or any(ord(character) < 32 or ord(character) == 127 for character in detail)
+        ):
+            detail = "local editor request failed"
+        raise RemoteError(detail)
+    print(f"Opened {project} on the originating machine")
+    return 0
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -632,7 +1038,8 @@ def doctor(verbose: bool = False) -> int:
     print(f"  OK data filesystem has {free // (1024 * 1024)} MiB free")
     if stale:
         print(
-            f"  WARN {len(stale)} stale lease record(s); the next open or convergence will clean them"
+            f"  WARN {len(stale)} stale lease record(s); the next editor session "
+            "or convergence will clean them"
         )
     if any(repairable for _problem, repairable in diagnostics):
         print(
@@ -702,11 +1109,11 @@ def lease(identifier: str) -> int:
         raise RemoteError("invalid lease identifier")
     line = sys.stdin.buffer.readline(65537)
     if not line or len(line) > 65536:
-        raise RemoteError("missing or oversized remote open request")
+        raise RemoteError("missing or oversized remote editor request")
     value = json.loads(line)
     raw_path = value.get("path") if isinstance(value, dict) else None
     if not isinstance(raw_path, str) or "\0" in raw_path:
-        raise RemoteError("remote open request requires a path")
+        raise RemoteError("remote editor request requires a path")
     project = Path(raw_path).expanduser().resolve(strict=True)
     if not project.is_dir():
         raise RemoteError(f"remote path is not a directory: {project}")
@@ -792,11 +1199,33 @@ def main() -> int:
             return status()
         if action == "lease" and len(sys.argv) == 3:
             return lease(sys.argv[2])
+        if action == "origin-prepare" and len(sys.argv) == 3:
+            return prepare_origin(sys.argv[2])
+        if action == "origin-cleanup" and len(sys.argv) == 3:
+            return cleanup_origin(sys.argv[2])
+        if action == "origin-shell" and len(sys.argv) in {3, 4}:
+            return origin_shell(
+                sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None
+            )
+        if action == "origin-editor":
+            arguments = sys.argv[2:]
+            via: str | None = None
+            if arguments[:1] == ["--via"]:
+                if len(arguments) < 2:
+                    raise RemoteError("origin-editor --via requires a token")
+                via = arguments[1]
+                arguments = arguments[2:]
+            if len(arguments) > 1:
+                raise RemoteError("origin-editor accepts at most one path")
+            return origin_editor(arguments[0] if arguments else None, via=via)
         if action == "reap" and len(sys.argv) == 3:
             return reap(sys.argv[2])
         print(
             "usage: remote-development.py "
-            "{converge|verify|doctor [--verbose]|remove|status|lease ID}",
+            "{converge|verify|doctor [--verbose]|remove|status|lease ID|"
+            "origin-prepare TOKEN|origin-cleanup TOKEN|"
+            "origin-shell TOKEN [CWD_B64URL]|"
+            "origin-editor [--via TOKEN] [PATH]}",
             file=sys.stderr,
         )
         return 2

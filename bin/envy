@@ -1417,7 +1417,7 @@ cmd_remote() {
       python3 "$ENVY_ROOT/lib/remote.py" --help
       return
       ;;
-    open)
+    editor|open|shell)
       _require_no_bundle_transaction
       _state_lock_release
       python3 "$ENVY_ROOT/lib/remote.py" "$@"
@@ -1429,6 +1429,10 @@ cmd_remote() {
       return
       ;;
     _lease) internal=lease ;;
+    _origin-prepare) internal=origin-prepare ;;
+    _origin-cleanup) internal=origin-cleanup ;;
+    _origin-shell) internal=origin-shell ;;
+    _origin-editor) internal=origin-editor ;;
     _status) internal=status ;;
     _doctor) internal=doctor ;;
     *) die "Unknown remote command: $action. Run 'envy remote --help'." ;;
@@ -1464,7 +1468,9 @@ Commands:
   bundle attach PATH [--dry-run]
   bundle detach ID [--dry-run] [--abort]
   bundle forget ID [--dry-run]
-  remote open HOST [PATH] [--no-browser] [--local-port PORT]
+  remote editor HOST [PATH] [--transport NAME] [--no-browser] [--local-port PORT]
+  remote editor --origin [--transport NAME] [--via ROUTE] [PATH]
+  remote shell HOST [--transport NAME] [--cwd PATH]
   remote {status|doctor} HOST
   secrets {push-key|pull-key} HOST [--force] [--yes] [--restore]
   uninstall [--only/-o FEATURES | --except/-e FEATURES] [--purge] [--yes] [--dry-run]

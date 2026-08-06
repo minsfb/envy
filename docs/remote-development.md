@@ -2,7 +2,7 @@
 
 Status: implemented for v1
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-06
 
 ## Decision summary
 
@@ -34,7 +34,7 @@ Version 1 decisions:
 - browser/PWA client first;
 - Linux and WSL development-server hosts only, with macOS supported as a local
   client;
-- `remote-development` as the feature and `envy remote open` as the public
+- `remote-development` as the feature and `envy remote editor` as the public
   command; and
 - Open VSX as the default registry, overrideable by trusted bundles, with no
   Envy-managed extension preset in version 1.
@@ -43,7 +43,7 @@ This implementation is not an irreversible product
 choice. Keep the public command, SSH session broker, policy, and engine
 lifecycle behind explicit adapter boundaries. A future native client will need
 a different remote engine and a local editor connector, but should not require
-changing `envy remote open`, host setup, bundle policy, or the verified
+changing `envy remote editor`, host setup, bundle policy, or the verified
 provisioning framework.
 
 ## Product definition
@@ -61,7 +61,7 @@ envy install --reconfigure       # enable remote-development
 envy upgrade --only remote-development
 
 # On the local host
-envy remote open devbox /work/project
+envy remote editor devbox /work/project
 ```
 
 `devbox` is an ordinary OpenSSH destination or config alias. `envy` must honor
@@ -186,12 +186,14 @@ cleanly for this evaluation.
 ### Commands
 
 ```text
-envy remote open [--no-browser] [--local-port PORT] HOST [REMOTE_PATH]
+envy remote editor [--no-browser] [--local-port PORT] [--transport NAME] HOST [REMOTE_PATH]
+envy remote shell [--transport NAME] [--cwd REMOTE_PATH] HOST
+envy remote editor --origin [--via ROUTE] [REMOTE_PATH]
 envy remote status HOST
 envy remote doctor HOST [--verbose]
 ```
 
-- `open` does not install or reconfigure the remote Envy installation. If the
+- `editor` does not install or reconfigure the remote Envy installation. If the
   feature is missing, it exits with instructions to enable and converge it.
 - `REMOTE_PATH` is interpreted on the remote host. It is transported as data,
   not interpolated into a remote shell command. The default is the remote home
@@ -208,12 +210,40 @@ envy remote doctor HOST [--verbose]
   checks. The flag is forwarded as a fixed literal rather than incorporated
   from user-supplied remote shell text.
 
-The command remains in the foreground. `Ctrl-C`, terminal close, or loss of the
-SSH connection releases its remote lease. The last lease stops the editor after
-a five-minute reconnect grace period and removes session-owned files. A
-hard-killed client may leave stale files, which the next `open` or feature
-convergence cleans after confirming no owning process exists. Read-only status
-and doctor commands report stale records without removing them.
+The editor or shell command remains in the foreground. `Ctrl-C`, terminal
+close, or loss of the SSH connection releases its remote lease. The last lease
+stops the editor after a five-minute reconnect grace period and removes
+session-owned files. A hard-killed client may leave stale files, which the next
+`editor` command or feature convergence cleans after confirming no owning
+process exists. Read-only status and doctor commands report stale records
+without removing them.
+
+`remote shell` installs a private, connection-scoped origin callback over the
+same Envy-owned SSH master. From that remote shell,
+`envy remote editor --origin [REMOTE_PATH]` asks the originating machine to
+lazily create the ordinary editor lease and loopback browser tunnel. If more
+than one callback is live, `--via ROUTE` selects one explicitly. Ending the
+shell removes its reverse stream-local forward, callback socket, and any lazy
+editor lease. The callback grants no reverse login and creates no remote TCP
+listener. Normal teardown removes every owned route. An abrupt connection loss
+may leave an inactive socket entry; a later shell preparation removes only
+valid, owned, mode-0600 entries that are at least five minutes old and still
+inactive, preserving fresh or unexpected entries. Origin requests allow a
+60-second response window, covering the full 30-second cold editor startup and
+bounded local-forward retry budgets before reporting failure. The shell exports a generic
+origin-transport hint so a return request uses the transport that created it.
+Because a persistent tmux server can retain stale environment, origin requests
+inside tmux ignore that hint and use the configured default. When the shell
+transport differs from that default, use
+`envy remote editor --origin --transport NAME`; add `--via ROUTE` when more than
+one origin is active.
+
+SSH is the default transport. An explicit `--transport NAME` overrides
+`settings.remote_development.preferred_transport` from the composed manifest.
+Non-SSH transports are exact, executable, non-symlink adapters at
+`$ENVY_BIN_DIR/nv-remote-transport-NAME`; they are never discovered through
+`PATH`. A configured adapter that is absent fails closed and tells the user how
+to select `--transport ssh`; Envy does not silently fall back.
 
 The first release runs one editor engine per remote Unix user and allows
 multiple concurrent leases from that user to the shared process. The engine
@@ -272,7 +302,7 @@ its engine and protocol rather than assuming HTTP, for example:
 }
 ```
 
-A future command may add `envy remote open --client native`; the unqualified
+A future command may add `envy remote editor --client native`; the unqualified
 command remains stable. Engine artifacts and user data must be namespaced by
 engine so a native pilot neither migrates nor corrupts `code-server` state.
 
@@ -322,7 +352,7 @@ Removing the feature deletes only its unchanged Envy-owned local extension; it
 never modifies user settings or kills workspace tmux sessions. A modified
 extension directory is treated as user-owned and retained.
 
-`envy remote open` may itself run in a local tmux pane, but local Resurrect must
+`envy remote editor` may itself run in a local tmux pane, but local Resurrect must
 not relaunch it automatically because reconnection can prompt for credentials
 and opens network and browser state. Restoring the pane should leave an
 actionable command for a deliberate reconnect.
@@ -332,7 +362,8 @@ actionable command for a deliberate reconnect.
 Keep the following naming layers:
 
 - `remote-development`: manifest feature ID;
-- `envy remote open`: stable user-facing command;
+- `envy remote editor`: stable user-facing command (`remote open` remains a
+  hidden compatibility alias);
 - `nv-remote-serve`, `nv-remote-terminal`, or similarly narrow `nv-*` names:
   installed implementation helpers, when helpers are needed.
 
@@ -480,7 +511,7 @@ can access. Real hostile-workspace isolation requires separate OS users,
 containers, or provisioned workspaces and is outside this feature.
 
 Version 1 uses one shared `code-server` process per remote Unix user with one
-private socket and a lease for each `envy remote open`. This gives settings and
+private socket and a lease for each `envy remote editor`. This gives settings and
 extensions one writer and makes concurrent browser windows inexpensive. The
 spike must verify this supported configuration; a failure blocks the chosen
 engine rather than silently changing the process model.
@@ -510,15 +541,18 @@ organization-specific SSH configuration. Envy must not:
 - set `StrictHostKeyChecking=no` or write `known_hosts` entries;
 - copy private keys or credentials to the remote host;
 - put tokens, passwords, or key material in arguments, URLs, logs, or state;
-- enable agent, X11, or remote forwarding for this feature; or
+- enable agent forwarding, X11 forwarding, remote TCP forwarding, or reverse
+  login access for this feature; or
 - rewrite the user's SSH configuration.
 
-Only the loopback-to-stream-local forward needed by the session is added.
+Only the loopback-to-stream-local editor forward and, for `remote shell`, one
+connection-scoped reverse stream-local callback are added. The callback joins
+two private mode-0600 Unix sockets beneath mode-0700 directories; it does not
+listen on TCP and carries only bounded, versioned editor requests and results.
 Every SSH invocation that can create a connection or remote session explicitly
 sets `ForwardAgent=no`, `ForwardX11=no`, `ForwardX11Trusted=no`, and
 `ClearAllForwardings=yes`; this process-local policy does not edit the user's
-SSH configuration. Control operations then add only the required
-`127.0.0.1:<port>` to private-remote-socket forward.
+SSH configuration. Control operations then add only those required forwards.
 Host-key changes and forwarding restrictions remain visible as ordinary SSH
 failures with focused guidance.
 
@@ -634,7 +668,7 @@ Then run the repository's full documented test suite.
 ## Acceptance criteria
 
 - A pre-provisioned supported host opens a requested folder through
-  `envy remote open HOST PATH` without a remote TCP listener.
+  `envy remote editor HOST PATH` without a remote TCP listener.
 - A macOS local client can open a supported Linux host; attempting to enable
   the server feature on macOS reports that the host platform is out of scope.
 - A changed or unknown host key is handled by system OpenSSH policy; Envy does

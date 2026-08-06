@@ -48,12 +48,9 @@ class RemoteTerminalHelperTest(unittest.TestCase):
             command,
             [
                 "/test/tmux",
-                "new-session",
-                "-A",
-                "-s",
-                helper.session_name(workspace),
-                "-c",
-                str(workspace),
+                "attach-session",
+                "-t",
+                f"={helper.session_name(workspace)}",
             ],
         )
 
@@ -65,23 +62,109 @@ class RemoteTerminalHelperTest(unittest.TestCase):
             fake_bin = root / "bin"
             fake_bin.mkdir()
             arguments = root / "arguments"
+            session = root / "session"
+            metadata = root / "metadata"
             tmux = fake_bin / "tmux"
             tmux.write_text(
-                '#!/bin/sh\nprintf "%s\\n" "$@" > "$NV_TEST_TMUX_ARGUMENTS"\n',
+                """#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+
+args = sys.argv[1:]
+log = Path(os.environ["NV_TEST_TMUX_ARGUMENTS"])
+with log.open("a", encoding="utf-8") as handle:
+    handle.write(json.dumps(args) + "\\n")
+session = Path(os.environ["NV_TEST_TMUX_SESSION"])
+metadata = Path(os.environ["NV_TEST_TMUX_METADATA"])
+if args[0] == "has-session":
+    raise SystemExit(0 if session.exists() else 1)
+if args[0] == "new-session":
+    session.write_text(args[-1], encoding="utf-8")
+elif args[0] == "display-message":
+    print(session.read_text(encoding="utf-8"))
+elif args[0] == "show-options":
+    values = json.loads(metadata.read_text(encoding="utf-8")) if metadata.exists() else {}
+    value = values.get(args[-1])
+    if value is None:
+        raise SystemExit(1)
+    print(value)
+elif args[0] == "set-option":
+    values = json.loads(metadata.read_text(encoding="utf-8")) if metadata.exists() else {}
+    values[args[-2]] = args[-1]
+    metadata.write_text(json.dumps(values), encoding="utf-8")
+elif args[0] != "attach-session":
+    raise SystemExit(2)
+""",
                 encoding="utf-8",
             )
             tmux.chmod(0o755)
             environment = os.environ.copy()
             environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
             environment["NV_TEST_TMUX_ARGUMENTS"] = str(arguments)
+            environment["NV_TEST_TMUX_SESSION"] = str(session)
+            environment["NV_TEST_TMUX_METADATA"] = str(metadata)
             subprocess.run(
                 [str(ROOT / "bin" / "nv-remote-terminal"), str(workspace)],
                 check=True,
                 env=environment,
             )
-            values = arguments.read_text(encoding="utf-8").splitlines()
-            self.assertEqual(values[:3], ["new-session", "-A", "-s"])
-            self.assertEqual(values[-2:], ["-c", str(workspace.resolve())])
+            invocations = [
+                json.loads(line)
+                for line in arguments.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertIn(
+                [
+                    "new-session",
+                    "-d",
+                    "-s",
+                    helper.session_name(workspace.resolve()),
+                    "-c",
+                    str(workspace.resolve()),
+                ],
+                invocations,
+            )
+            self.assertEqual(
+                json.loads(metadata.read_text(encoding="utf-8")),
+                {
+                    helper.WORKSPACE_OPTION: str(workspace.resolve()),
+                    helper.WORKSPACE_SCHEMA_OPTION: "1",
+                },
+            )
+            self.assertEqual(
+                invocations[-1],
+                [
+                    "attach-session",
+                    "-t",
+                    f"={helper.session_name(workspace.resolve())}",
+                ],
+            )
+
+            conflicting = root / "different-workspace"
+            conflicting.mkdir()
+            metadata.write_text(
+                json.dumps(
+                    {
+                        helper.WORKSPACE_OPTION: str(conflicting),
+                        helper.WORKSPACE_SCHEMA_OPTION: "1",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [str(ROOT / "bin" / "nv-remote-terminal"), str(workspace)],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("workspace metadata conflicts", result.stderr)
+            self.assertEqual(
+                json.loads(metadata.read_text(encoding="utf-8"))[
+                    helper.WORKSPACE_OPTION
+                ],
+                str(conflicting),
+            )
 
 
 class RemoteTmuxFeatureTest(unittest.TestCase):

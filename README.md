@@ -170,17 +170,42 @@ Enable `remote-development` during `envy install --reconfigure` on a Linux or
 WSL host, then connect from macOS, Linux, or WSL with the system OpenSSH client:
 
 ```bash
-envy remote open user@host /path/to/project
+envy remote editor user@host /path/to/project
+envy remote shell user@host --cwd /path/to/project
 envy remote status user@host
 envy remote doctor user@host
 envy remote doctor user@host --verbose
 ```
 
-The command prints a loopback URL, opens it in the default browser, and stays in
+`remote editor` prints a loopback URL, opens it in the default browser, and stays in
 the foreground to own the SSH lease. Use `--no-browser` for PWA or manual
 workflows and `--local-port PORT` when a stable local port is needed. No remote
 TCP port is exposed: the pinned `code-server` process listens on a private Unix
 socket and is reachable only through the SSH control connection.
+
+`remote shell` keeps one Envy-owned connection in the foreground and provides a
+private, connection-scoped callback to its originating machine. From that shell,
+`envy remote editor --origin [PATH]` lazily starts the editor lease and browser
+tunnel on the origin; `--via ROUTE` disambiguates multiple live origins. The
+callback is a private Unix socket in each direction, never a reverse login or a
+remote TCP listener, and all forwards and lazy leases are removed when the shell
+ends normally. An abrupt connection loss can leave only an inactive socket
+entry; the next shell preparation reaps owned entries after a conservative
+five-minute age check. A shell records its transport for this return trip, but
+persistent tmux
+sessions deliberately ignore that inherited hint; use an explicit `--transport`
+there when the configured default is not appropriate, for example
+`envy remote editor --origin --transport ssh` (adding `--via ROUTE` when more
+than one origin is active). The former
+`envy remote open HOST [PATH]` spelling remains a compatibility alias but is
+omitted from primary help.
+
+SSH is the default transport. A trusted bundle may set
+`settings.remote_development.preferred_transport` or users may pass
+`--transport NAME`. External transports are accepted only through an exact,
+executable, non-symlink adapter at
+`$ENVY_BIN_DIR/nv-remote-transport-NAME`; Envy never discovers adapters on
+`PATH`.
 
 `remote doctor` is read-only. Its default output checks the local browser
 opener and system OpenSSH client before running the remote checks. `--verbose`
