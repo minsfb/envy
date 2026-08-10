@@ -482,6 +482,16 @@ def converge(source: Path) -> int:
         if not is_conflict(item, written):
             actions[item.target] = "overwrite"
             continue
+        if (
+            managed is not None
+            and managed.kind == "dir"
+            and item.target.is_dir()
+            and not item.target.is_symlink()
+        ):
+            # Chezmoi only applies managed metadata to an existing directory;
+            # its local children are preserved. This is safe noninteractively.
+            actions[item.target] = "overwrite"
+            continue
         if overwrite_all:
             actions[item.target] = "overwrite"
             continue

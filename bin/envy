@@ -344,6 +344,19 @@ _append_csv() {
   IFS="$old_ifs"
 }
 
+_append_install_enable_csv() {
+  local raw="$1" item
+  local old_ifs="$IFS"
+  IFS=','
+  for item in $raw; do
+    item="${item#"${item%%[![:space:]]*}"}"
+    item="${item%"${item##*[![:space:]]}"}"
+    [[ -n "$item" ]] || continue
+    INSTALL_ENABLE+=("$item")
+  done
+  IFS="$old_ifs"
+}
+
 _reset_selectors() { SELECT_ONLY=(); SELECT_EXCEPT=(); }
 
 _select_only_has_items() { [[ -n "${SELECT_ONLY[0]+set}" ]]; }
@@ -490,7 +503,8 @@ _select_install_features() {
         ;;
     esac
     has_current=false
-    if [[ "$reconfigure" == true && "$interactive" == true ]] && nv_state_exists; then
+    if [[ "$reconfigure" == true ]] && nv_state_exists \
+      && { [[ "$interactive" == true ]] || [[ -n "${INSTALL_ENABLE[0]+set}" ]]; }; then
       current_value="$(nv_state_feature_get "$feature" enabled 2>/dev/null || true)"
       selection_explicit="$(nv_state_feature_get "$feature" selection_explicit true 2>/dev/null || echo true)"
       if [[ "$selection_explicit" == true ]] \
@@ -505,6 +519,37 @@ _select_install_features() {
       enabled="$FEATURE_PROMPT_VALUE"
     fi
     if [[ "$enabled" == true ]]; then INSTALL_SELECTION+=("$feature"); fi
+  done
+}
+
+_validate_install_enables() {
+  local feature
+  for feature in ${INSTALL_ENABLE[0]+"${INSTALL_ENABLE[@]}"}; do
+    nv_feature_exists "$feature" || die "Unknown feature: $feature"
+    nv_feature_in_scope "$feature" \
+      || die "Feature '$feature' is unavailable on $ENVY_PLATFORM"
+  done
+}
+
+_select_install_feature_with_dependencies() {
+  local feature="$1" dependency
+  if [[ -n "${INSTALL_SELECTION[0]+set}" ]] \
+    && _array_contains "$feature" "${INSTALL_SELECTION[@]}"; then
+    return 0
+  fi
+  while IFS= read -r dependency; do
+    [[ -n "$dependency" ]] || continue
+    nv_feature_in_scope "$dependency" \
+      || die "Feature '$feature' requires unavailable feature '$dependency' on $ENVY_PLATFORM"
+    _select_install_feature_with_dependencies "$dependency"
+  done < <(nv_feature_dependencies "$feature")
+  INSTALL_SELECTION+=("$feature")
+}
+
+_apply_install_enables() {
+  local feature
+  for feature in ${INSTALL_ENABLE[0]+"${INSTALL_ENABLE[@]}"}; do
+    _select_install_feature_with_dependencies "$feature"
   done
 }
 
@@ -608,6 +653,7 @@ _reconcile_selection_consumers() {
 
 cmd_install() {
   local preset="" reconfigure=false assume_yes=false dry_run=false interactive=false
+  INSTALL_ENABLE=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --preset|--profile)
@@ -616,6 +662,11 @@ cmd_install() {
         shift 2
         ;;
       --reconfigure) reconfigure=true; shift ;;
+      --enable)
+        [[ $# -ge 2 ]] || die "$1 requires feature names"
+        _append_install_enable_csv "$2"
+        shift 2
+        ;;
       --yes|-y) assume_yes=true; shift ;;
       --dry-run|-n) dry_run=true; shift ;;
       *) die "Unknown install option: $1" ;;
@@ -627,6 +678,12 @@ cmd_install() {
   nv_detect_platform
   export ENVY_DRY_RUN="$dry_run"
   [[ "$ENVY_PLATFORM" != unsupported ]] || die "Unsupported platform. Windows requires Git Bash."
+  _validate_install_enables
+  if [[ -n "${INSTALL_ENABLE[0]+set}" ]] && nv_state_exists \
+    && [[ "$(nv_state_get installed false 2>/dev/null || echo false)" == true ]] \
+    && [[ "$reconfigure" == false ]]; then
+    die "--enable on an existing installation requires --reconfigure"
+  fi
   _prepare_state
 
   if nv_state_exists && [[ "$(nv_state_get installed false)" == true && "$reconfigure" == false ]]; then
@@ -669,7 +726,10 @@ cmd_install() {
     fi
   fi
   _select_install_features "$preset" "$interactive" "$reconfigure"
-  [[ "$interactive" == true ]] && preset=custom
+  _apply_install_enables
+  if [[ "$interactive" == true || -n "${INSTALL_ENABLE[0]+set}" ]]; then
+    preset=custom
+  fi
   _show_install_plan
   if [[ "$dry_run" == true ]]; then
     echo ""
@@ -1460,7 +1520,7 @@ Global:
   --bundle PATH       Add one explicit feature/resource bundle (repeatable)
 
 Commands:
-  install [--preset core|recommended] [--reconfigure] [--yes] [--dry-run]
+  install [--preset core|recommended] [--enable FEATURES] [--reconfigure] [--yes] [--dry-run]
   upgrade [--only/-o FEATURES | --except/-e FEATURES] [--force] [--dry-run]
   status [--json]
   verify [--only/-o FEATURES | --except/-e FEATURES] [--json]
