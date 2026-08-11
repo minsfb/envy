@@ -7,6 +7,7 @@ import copy
 import datetime as dt
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -28,16 +29,13 @@ STATE_ROOT = paths.state_dir() / "agent-notifications"
 BACKUP_ROOT = paths.state_dir() / "backups" / "agent-notifications"
 OWNERSHIP = STATE_ROOT / "ownership.json"
 HOOK_TOKEN = "nv-agent-notify"
-SUPPORTED_ADAPTERS = {"claude", "codex", "metacode", "pi"}
+ADAPTER_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 HOOK_FILES = {
     "claude": HOME / ".claude" / "settings.json",
     "codex": HOME / ".codex" / "hooks.json",
 }
 HELPERS = ("nv-agent-notify", "nv-terminal-notify")
-METACODE_PLUGIN = (
-    CONFIG_HOME / "opencode" / "plugins" / "nv-agent-notifications.js"
-)
 PI_EXTENSION = HOME / ".pi" / "agent" / "extensions" / "nv-tmux-session.ts"
 ALACRITTY_CONFIG = CONFIG_HOME / "alacritty" / "alacritty.toml"
 
@@ -70,10 +68,10 @@ def settings() -> tuple[set[str], str]:
     raw = value.get("adapters", [])
     if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
         raise FeatureError("settings.agent_notifications.adapters must be an array")
-    unknown = set(raw) - SUPPORTED_ADAPTERS
-    if unknown:
+    invalid = sorted(item for item in raw if not ADAPTER_RE.fullmatch(item))
+    if invalid:
         raise FeatureError(
-            f"unknown agent notification adapters: {', '.join(sorted(unknown))}"
+            f"invalid agent notification adapters: {', '.join(invalid)}"
         )
     condition = value.get("condition", "unfocused")
     if condition not in {"always", "unfocused"}:
@@ -215,8 +213,6 @@ def assets_missing(adapters: set[str]) -> list[Path]:
         for name in HELPERS
         if not os.access(HOME / ".local" / "bin" / name, os.X_OK)
     ]
-    if "metacode" in adapters and not METACODE_PLUGIN.is_file():
-        missing.append(METACODE_PLUGIN)
     if "pi" in adapters and not PI_EXTENSION.is_file():
         missing.append(PI_EXTENSION)
     if sys.platform == "darwin" and (

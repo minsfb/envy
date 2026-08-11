@@ -30,8 +30,11 @@ grep -q '^incoming-c$' "$TEMP/text/result" || fail 'incoming text change was los
 
 printf 'local\n' >"$TEMP/agent/local"
 printf 'incoming\n' >"$TEMP/agent/incoming"
-if "$ENGINE" --local "$TEMP/agent/local" --incoming "$TEMP/agent/incoming" \
-  --output "$TEMP/agent/disabled" >/dev/null 2>&1; then
+if (
+  unset ENVY_SMART_MERGE_AGENT ENVY_SMART_MERGE_AGENT_COMMAND
+  "$ENGINE" --local "$TEMP/agent/local" --incoming "$TEMP/agent/incoming" \
+    --output "$TEMP/agent/disabled" >/dev/null 2>&1
+); then
   fail 'agent fallback was enabled by default'
 fi
 cat >"$TEMP/fake-agent" <<'EOF'

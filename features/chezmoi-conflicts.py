@@ -485,8 +485,8 @@ def converge(source: Path) -> int:
         if (
             managed is not None
             and managed.kind == "dir"
-            and item.target.is_dir()
             and not item.target.is_symlink()
+            and item.target.is_dir()
         ):
             # Chezmoi only applies managed metadata to an existing directory;
             # its local children are preserved. This is safe noninteractively.

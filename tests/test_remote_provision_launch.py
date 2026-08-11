@@ -32,10 +32,16 @@ class RemoteProvisionLaunchTest(unittest.TestCase):
         self.base = Path(self.temporary.name)
         self.previous = {
             key: os.environ.get(key)
-            for key in ("XDG_STATE_HOME", "XDG_DATA_HOME", "ENVY_MANIFEST")
+            for key in (
+                "XDG_STATE_HOME",
+                "XDG_DATA_HOME",
+                "XDG_RUNTIME_DIR",
+                "ENVY_MANIFEST",
+            )
         }
         os.environ["XDG_STATE_HOME"] = str(self.base / "state")
         os.environ["XDG_DATA_HOME"] = str(self.base / "data")
+        os.environ["XDG_RUNTIME_DIR"] = str(self.base / "runtime")
         os.environ.pop("ENVY_MANIFEST", None)
         self.feature = load_module(
             f"envy_remote_provision_launch_{id(self)}",
