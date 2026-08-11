@@ -10,6 +10,9 @@ README:
 - dry-run is mutation-free;
 - credentials and private environment facts never enter source, fixtures, logs,
   state, or command arguments;
+- core features, defaults, documentation, and tests remain vendor- and
+  environment-neutral; organization-specific hosts, tools, adapters, and
+  policies belong in explicit bundles behind generic extension points;
 - new dependencies are exact, documented, and license-reviewed;
 - bumping a provisioned tool version re-records its per-platform SHA-256 digests
   with `python3 lib/provision.py record <tool>`; an artifact whose digest is

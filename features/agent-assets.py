@@ -81,6 +81,44 @@ def load_json(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
+def available_plugin_versions(claude_root: Path) -> dict[str, str]:
+    registry_path = claude_root / "plugins" / "known_marketplaces.json"
+    if not registry_path.is_file():
+        return {}
+    try:
+        marketplaces = load_json(registry_path, "Claude marketplace registry")
+    except AssetError:
+        return {}
+    available: dict[str, str] = {}
+    for marketplace_name, definition in marketplaces.items():
+        if not isinstance(marketplace_name, str) or not isinstance(definition, dict):
+            continue
+        raw_location = definition.get("installLocation")
+        if not isinstance(raw_location, str):
+            continue
+        location = Path(raw_location).expanduser()
+        if not location.is_absolute():
+            location = claude_root / location
+        manifest_path = location / ".claude-plugin" / "marketplace.json"
+        if not manifest_path.is_file():
+            continue
+        try:
+            manifest = load_json(manifest_path, f"{marketplace_name} manifest")
+        except AssetError:
+            continue
+        plugins = manifest.get("plugins", [])
+        if not isinstance(plugins, list):
+            continue
+        for item in plugins:
+            if (
+                isinstance(item, dict)
+                and isinstance(item.get("name"), str)
+                and isinstance(item.get("version"), str)
+            ):
+                available[f"{item['name']}@{marketplace_name}"] = item["version"]
+    return available
+
+
 def configured_manifests(args: argparse.Namespace) -> list[Path]:
     explicit = args.manifest or os.environ.get("ENVY_AGENT_ASSETS_MANIFEST")
     if explicit:
@@ -888,15 +926,9 @@ class AgentAssets:
         return report
 
     def plugin_report(self) -> dict[str, Any]:
-        settings_path = Path.home() / ".claude" / "settings.json"
-        registry_path = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
-        available_path = (
-            Path.home()
-            / ".claude"
-            / "agent-market"
-            / ".claude-plugin"
-            / "marketplace.json"
-        )
+        claude_root = Path.home() / ".claude"
+        settings_path = claude_root / "settings.json"
+        registry_path = claude_root / "plugins" / "installed_plugins.json"
         result: dict[str, Any] = {
             "settings": str(settings_path),
             "registry": str(registry_path),
@@ -923,19 +955,7 @@ class AgentAssets:
                 )
             except AssetError as error:
                 result["registry_error"] = str(error)
-        available: dict[str, str] = {}
-        if available_path.is_file():
-            try:
-                market = load_json(available_path, "agent-market manifest")
-                available = {
-                    item.get("name"): item.get("version")
-                    for item in market.get("plugins", [])
-                    if isinstance(item, dict)
-                    and isinstance(item.get("name"), str)
-                    and isinstance(item.get("version"), str)
-                }
-            except AssetError:
-                pass
+        available = available_plugin_versions(claude_root)
 
         skills: dict[str, list[dict[str, str]]] = {}
         for plugin_name in sorted(
@@ -963,11 +983,10 @@ class AgentAssets:
                 Path(raw_install_path) if isinstance(raw_install_path, str) else None
             )
             cache_exists = install_path is not None and install_path.is_dir()
-            short_name = plugin_name.split("@", 1)[0]
             plugin: dict[str, Any] = {
                 "name": plugin_name,
                 "version": record.get("version") if isinstance(record, dict) else None,
-                "available_version": available.get(short_name),
+                "available_version": available.get(plugin_name),
                 "install_path": str(install_path) if install_path is not None else None,
                 "cache_exists": cache_exists,
                 "skills": [],

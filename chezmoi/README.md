@@ -11,7 +11,7 @@ The base owns:
 - tmux configuration, persistence helpers, and agent-session/notification
   helpers;
 - Alacritty configuration on macOS;
-- a MetaCode notification plugin and Pi lifecycle adapter;
+- the Pi lifecycle adapter;
 - the locked Mise tool configuration;
 - canonical agent guidance with Claude and Codex symlink adapters;
 - the optional Pi lifecycle extension.

@@ -27,7 +27,7 @@
       "agent_adapters": ["claude", "codex", "pi"]
     },
     "agent_notifications": {
-      "adapters": ["claude", "codex", "metacode", "pi"],
+      "adapters": ["claude", "codex", "pi"],
       "condition": "unfocused"
     }
   },

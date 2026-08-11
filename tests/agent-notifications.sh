@@ -13,7 +13,6 @@ CONFIG_DIR="$HOME_DIR/.config"
 STATE_DIR="$HOME_DIR/.local/state"
 mkdir -p \
   "$BIN_DIR" \
-  "$CONFIG_DIR/opencode/plugins" \
   "$STATE_DIR" \
   "$HOME_DIR/.claude" \
   "$HOME_DIR/.codex" \
@@ -23,8 +22,6 @@ for helper in nv-agent-notify nv-terminal-notify; do
   cp "$ROOT/chezmoi/dot_local/bin/executable_$helper" "$BIN_DIR/$helper"
   chmod +x "$BIN_DIR/$helper"
 done
-cp "$ROOT/chezmoi/dot_config/opencode/plugins/nv-agent-notifications.js" \
-  "$CONFIG_DIR/opencode/plugins/nv-agent-notifications.js"
 ENVY_BIN_DIR="$BIN_DIR" HOME="$HOME_DIR" chezmoi execute-template \
   --source "$ROOT/chezmoi" --destination "$HOME_DIR" \
   <"$ROOT/chezmoi/dot_pi/agent/extensions/nv-tmux-session.ts.tmpl" \
@@ -85,10 +82,26 @@ env "${FEATURE_ENV[@]}" "$ROOT/features/agent-notifications.py" verify
 
 MARKER="$CONFIG_DIR/envy/agent-notifications.enabled"
 [[ -f "$MARKER" ]] || fail 'feature marker was not created'
-grep -q '^adapters=claude,codex,metacode,pi$' "$MARKER" || \
+grep -q '^adapters=claude,codex,pi$' "$MARKER" || \
   fail 'feature marker does not contain selected adapters'
 grep -q '^condition=unfocused$' "$MARKER" || \
   fail 'feature marker does not contain the notification condition'
+
+python3 - "$ROOT/envy.json" "$TEMP/external-manifest.json" <<'PY'
+import json
+import sys
+
+source, destination = sys.argv[1:]
+manifest = json.load(open(source, encoding="utf-8"))
+manifest["settings"]["agent_notifications"]["adapters"].append("example-adapter")
+with open(destination, "w", encoding="utf-8") as handle:
+    json.dump(manifest, handle)
+PY
+env "${FEATURE_ENV[@]}" ENVY_MANIFEST="$TEMP/external-manifest.json" \
+  "$ROOT/features/agent-notifications.py" converge >/dev/null
+grep -q '^adapters=claude,codex,example-adapter,pi$' "$MARKER" || \
+  fail 'bundle-provided notification adapter was rejected'
+env "${FEATURE_ENV[@]}" "$ROOT/features/agent-notifications.py" converge >/dev/null
 
 python3 - "$HOME_DIR/.claude/settings.json" "$HOME_DIR/.codex/hooks.json" <<'PY'
 import json
@@ -121,8 +134,6 @@ assert any("nv-agent-notify" in item for item in commands(codex, "Stop"))
 assert any("nv-agent-notify" in item for item in commands(codex, "PermissionRequest"))
 PY
 
-grep -q '"session.idle"' "$CONFIG_DIR/opencode/plugins/nv-agent-notifications.js" || \
-  fail 'MetaCode idle adapter is missing'
 grep -q 'agent_settled' "$HOME_DIR/.pi/agent/extensions/nv-tmux-session.ts" || \
   fail 'Pi settled adapter is missing'
 

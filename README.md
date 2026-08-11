@@ -124,7 +124,7 @@ register as drift and converge on a plain `envy upgrade`.
 | `mise` | core | Install the exact core tool set plus unlocked bundle conf.d layers |
 | `path` | core | Generate the selected command environment |
 | `terminal` | recommended | Ensure zsh/tmux through the native package manager and provide Alacritty on macOS |
-| `agent-notifications` | recommended | Route Claude, Codex, MetaCode, and Pi attention events through terminal BEL |
+| `agent-notifications` | recommended | Route Claude, Codex, Pi, and bundle-provided agent events through terminal BEL |
 | `tmux-persistence` | recommended | Resurrect/Continuum layouts and agent-session metadata |
 | `agent-assets` | recommended | Common QA/workflow assets plus manifest-selected bundle assets with ownership tracking |
 | `adb` | optional | Select an existing Android SDK without downloading it |
@@ -289,9 +289,10 @@ process memory or copy transcript databases between hosts.
 
 The notification feature uses terminal BEL as the transport across nested
 shells, remote shells or SSH, and tmux. Claude and Codex receive additive
-lifecycle hooks, MetaCode loads a global event plugin, and Pi uses the managed
-lifecycle extension. The emitter writes directly to the originating tmux pane
-so captured hook stdout does not swallow the alert. By default, it suppresses
+lifecycle hooks, and Pi uses the managed lifecycle extension. Bundles may add
+adapter names and install integrations that invoke `nv-agent-notify` with the
+matching name. The emitter writes directly to the originating tmux pane so
+captured hook stdout does not swallow the alert. By default, it suppresses
 alerts while that pane's tmux window has a focused client.
 
 On macOS, Alacritty converts BEL into a visual flash and a deduplicated
@@ -307,13 +308,14 @@ Adapters and focus behavior are manifest settings:
 {
   "settings": {
     "agent_notifications": {
-      "adapters": ["claude", "codex", "metacode", "pi"],
+      "adapters": ["claude", "codex", "pi"],
       "condition": "unfocused"
     }
   }
 }
 ```
 
+Adapter names use lowercase letters, digits, underscores, and hyphens.
 `condition` accepts `unfocused` or `always`. Run
 `nv-agent-notify --test` inside the target pane to test raw BEL delivery.
 

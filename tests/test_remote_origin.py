@@ -109,7 +109,6 @@ class RemoteOriginTest(unittest.TestCase):
                 "TMUX_PANE",
                 "SSH_CONNECTION",
                 "SSH_TTY",
-                "ENKAKU_RUN_CALLER_SESSION_ID",
             )
         }
         os.environ["XDG_STATE_HOME"] = str(self.base / "state")
@@ -384,7 +383,7 @@ class RemoteOriginTest(unittest.TestCase):
         os.environ["TMUX_PANE"] = "%7"
         os.environ["SSH_CONNECTION"] = "client 1 server 2"
         os.environ["SSH_TTY"] = "/dev/pts/1"
-        os.environ["ENKAKU_RUN_CALLER_SESSION_ID"] = "do-not-trust"
+        os.environ["ENVY_REMOTE_ORIGIN_TRANSPORT"] = "do-not-trust"
 
         def run(arguments, **_kwargs):
             final = arguments[-1]
