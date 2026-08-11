@@ -67,7 +67,13 @@ EOF
 chmod +x "$BIN_DIR/chezmoi" "$BIN_DIR/mise"
 
 run_cli() {
-  HOME="$HOME_DIR" \
+  run_cli_home "$HOME_DIR" "$@"
+}
+
+run_cli_home() {
+  local target_home="$1"
+  shift
+  HOME="$target_home" \
   PATH="$BIN_DIR:/usr/bin:/bin" \
   ENVY_PLATFORM_OVERRIDE=linux \
   ENVY_NETWORK_PROXY=proxy-value \
@@ -76,6 +82,35 @@ run_cli() {
   ENVY_SKIP_DEPENDENCY_PINS=1 \
   "$ROOT/bin/envy" "$@"
 }
+
+ENABLE_HOME="$SANDBOX/enable-home"
+mkdir -p "$ENABLE_HOME"
+run_cli_home "$ENABLE_HOME" install --preset core \
+  --enable agent-notifications --dry-run >"$SANDBOX/enable-dry-run.out"
+assert_contains "$SANDBOX/enable-dry-run.out" "terminal"
+assert_contains "$SANDBOX/enable-dry-run.out" "agent-notifications"
+assert_not_file "$ENABLE_HOME/.config/envy/state.json"
+
+UNKNOWN_HOME="$SANDBOX/unknown-enable-home"
+mkdir -p "$UNKNOWN_HOME"
+if run_cli_home "$UNKNOWN_HOME" install --preset core \
+  --enable no-such-feature --dry-run >"$SANDBOX/unknown-enable.out" 2>&1; then
+  fail "unknown install --enable feature unexpectedly succeeded"
+fi
+assert_contains "$SANDBOX/unknown-enable.out" "Unknown feature: no-such-feature"
+assert_not_file "$UNKNOWN_HOME/.config/envy/state.json"
+
+run_cli_home "$ENABLE_HOME" install --preset core --enable terminal \
+  >"$SANDBOX/enable-install.out"
+ENABLE_STATE="$ENABLE_HOME/.config/envy/state.json"
+assert_eq "$(python3 "$ROOT/lib/state.py" "$ENABLE_STATE" get features.terminal.enabled)" true
+assert_eq "$(python3 "$ROOT/lib/state.py" "$ENABLE_STATE" get features.terminal.selection_explicit)" true
+assert_eq "$(python3 "$ROOT/lib/state.py" "$ENABLE_STATE" get preset)" custom
+if run_cli_home "$ENABLE_HOME" install --enable agent-notifications --yes \
+  >"$SANDBOX/enable-existing.out" 2>&1; then
+  fail "existing install --enable unexpectedly succeeded without --reconfigure"
+fi
+assert_contains "$SANDBOX/enable-existing.out" "requires --reconfigure"
 
 run_cli install --preset core --dry-run >"$SANDBOX/dry-run.out"
 assert_not_file "$HOME_DIR/.config/envy/state.json"

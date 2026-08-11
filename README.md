@@ -30,6 +30,9 @@ automation, choose `--preset core|recommended` or use `--yes`.
 
 ```bash
 envy install --reconfigure
+
+# Add specific optional features noninteractively (repeatable or comma-separated).
+envy install --reconfigure --enable remote-development --yes
 envy upgrade
 envy upgrade --only chezmoi,mise
 envy status
@@ -40,6 +43,11 @@ envy uninstall --yes
 
 `core` and `recommended` are selection presets. They are not environment
 profiles and do not change feature implementations.
+
+`install --enable` adds explicit features after applying the preset and also
+selects their transitive dependencies. Unknown or out-of-scope names fail
+before installation state is written. On an existing installation, combine it
+with `--reconfigure`; current explicit selections are retained.
 
 ## Explicit bundles
 
