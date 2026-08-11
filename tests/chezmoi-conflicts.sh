@@ -100,13 +100,9 @@ grep -q '^managed-one$' "$HOME_DIR/.test" || fail 'initial apply failed'
 
 printf 'local-child\n' >"$HOME_DIR/.agentdir/local"
 chmod 700 "$HOME_DIR/.agentdir"
-run_prompt 0 "$TEMP/directory-mode.out" m
-grep -qF 'keeps directory contents and applies that metadata' \
-  "$TEMP/directory-mode.out" || fail 'directory-specific merge action was not explained'
-grep -qF 'Keeping directory contents and applying managed metadata.' \
-  "$TEMP/directory-mode.out" || fail 'directory merge action was not confirmed'
+env "${BROKER_ENV[@]}" "$BROKER" apply "$SOURCE" </dev/null
 grep -q '^local-child$' "$HOME_DIR/.agentdir/local" \
-  || fail 'directory metadata merge removed local contents'
+  || fail 'noninteractive directory metadata convergence removed local contents'
 python3 - "$HOME_DIR/.agentdir" <<'PY'
 import os
 import stat
