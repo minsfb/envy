@@ -532,7 +532,11 @@ team-bundle/
 Relative paths resolve from the bundle root. A portable bundle must keep its
 handlers, fact provider, resources, and feature PATH entries inside that root.
 Add `recommended_features` only for features the recommended preset should
-select. Validate composition before lifecycle testing:
+select. An agent-asset manifest may declare exact legacy wrappers under
+`launcher_predecessors`, using a lowercase `manager` and a `script` path
+relative to that manifest. Envy adopts only a byte-for-byte matching generated
+wrapper; every other pre-existing launcher remains a conflict. Validate
+composition before lifecycle testing:
 
 ```bash
 python3 lib/manifest.py compose \

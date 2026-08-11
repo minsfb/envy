@@ -8,7 +8,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 HOME_DIR="$TEMP/home"
 ASSETS="$TEMP/assets"
-mkdir -p "$HOME_DIR/.config/envy" "$ASSETS/extra/example"
+mkdir -p "$HOME_DIR/.config/envy" "$HOME_DIR/.local/bin" "$ASSETS/extra/example"
 cat >"$ASSETS/extra/example/SKILL.md" <<'EOF'
 ---
 name: example
@@ -24,10 +24,18 @@ cat >"$ASSETS/manifest.json" <<EOF
     "claude": {"skills": "~/.claude/skills"},
     "codex": {"skills": "~/.agents/skills"}
   },
+  "launcher_predecessors": [
+    {"manager": "example-bundle", "script": "$TEMP/legacy-agent-assets.py"}
+  ],
   "skill_groups": [
     {"name": "extra", "path": "extra", "targets": ["claude", "codex"]}
   ]
 }
+EOF
+cat >"$HOME_DIR/.local/bin/agent-assets" <<EOF
+#!/usr/bin/env bash
+# managed by example-bundle agent-assets
+exec $TEMP/legacy-agent-assets.py "\$@"
 EOF
 cat >"$HOME_DIR/.config/envy/state.json" <<'EOF'
 {
@@ -55,6 +63,8 @@ ENVIRONMENT=(
   ENVY_STATE_FILE="$HOME_DIR/.config/envy/state.json"
 )
 env "${ENVIRONMENT[@]}" "$ROOT/features/agent-assets.py" converge >/dev/null
+grep -q '^# managed by envy agent-assets$' "$HOME_DIR/.local/bin/agent-assets" \
+  || fail 'declared predecessor launcher was not adopted'
 [[ -L "$HOME_DIR/.claude/skills/handoff" ]] || fail 'core Claude skill was not linked'
 [[ -L "$HOME_DIR/.agents/skills/handoff" ]] || fail 'core Codex skill was not linked'
 [[ -L "$HOME_DIR/.claude/skills/example" ]] || fail 'additional Claude skill was not linked'

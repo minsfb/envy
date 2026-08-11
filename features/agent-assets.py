@@ -81,6 +81,14 @@ def load_json(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
+def launcher_script(manager: str, script: Path) -> str:
+    return (
+        "#!/usr/bin/env bash\n"
+        f"# managed by {manager} agent-assets\n"
+        f'exec {shlex.quote(str(script))} "$@"\n'
+    )
+
+
 def available_plugin_versions(claude_root: Path) -> dict[str, str]:
     registry_path = claude_root / "plugins" / "known_marketplaces.json"
     if not registry_path.is_file():
@@ -141,6 +149,7 @@ def compose_manifests(paths: list[Path]) -> dict[str, Any]:
         "audit_roots": [],
         "skill_groups": [],
         "agent_groups": [],
+        "launcher_predecessors": [],
         "plugin_audit": False,
     }
     group_names: set[tuple[str, str]] = set()
@@ -183,6 +192,24 @@ def compose_manifests(paths: list[Path]) -> dict[str, Any]:
         if not isinstance(audit_roots, list):
             raise AssetError(f"audit_roots must be an array: {path}")
         result["audit_roots"].extend(audit_roots)
+        predecessors = value.get("launcher_predecessors", [])
+        if not isinstance(predecessors, list):
+            raise AssetError(f"launcher_predecessors must be an array: {path}")
+        for predecessor in predecessors:
+            if not isinstance(predecessor, dict):
+                raise AssetError(f"invalid launcher predecessor in {path}")
+            manager = predecessor.get("manager")
+            raw_script = predecessor.get("script")
+            if not isinstance(manager, str) or not NAME_RE.fullmatch(manager):
+                raise AssetError(f"invalid launcher predecessor manager in {path}")
+            if not isinstance(raw_script, str) or not raw_script:
+                raise AssetError(f"invalid launcher predecessor script in {path}")
+            script = Path(raw_script).expanduser()
+            if not script.is_absolute():
+                script = path.parent / script
+            result["launcher_predecessors"].append(
+                {"manager": manager, "script": str(script.resolve())}
+            )
         result["plugin_audit"] = bool(
             result["plugin_audit"] or value.get("plugin_audit", False)
         )
@@ -709,11 +736,13 @@ class AgentAssets:
         }
 
     def launcher_content(self) -> str:
-        return (
-            "#!/usr/bin/env bash\n"
-            "# managed by envy agent-assets\n"
-            f'exec {shlex.quote(str(Path(__file__).resolve()))} "$@"\n'
-        )
+        return launcher_script("envy", Path(__file__).resolve())
+
+    def predecessor_launcher_contents(self) -> set[str]:
+        return {
+            launcher_script(item["manager"], Path(item["script"]))
+            for item in self.manifest.get("launcher_predecessors", [])
+        }
 
     def launcher_status(self) -> str:
         if not self.launcher.exists() and not self.launcher.is_symlink():
@@ -721,11 +750,12 @@ class AgentAssets:
         if not self.launcher.is_file() or self.launcher.is_symlink():
             return "conflict"
         try:
-            return (
-                "current"
-                if self.launcher.read_text() == self.launcher_content()
-                else "conflict"
-            )
+            content = self.launcher.read_text()
+            if content == self.launcher_content():
+                return "current"
+            if content in self.predecessor_launcher_contents():
+                return "adoptable"
+            return "conflict"
         except OSError:
             return "conflict"
 

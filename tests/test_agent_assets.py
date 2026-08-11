@@ -88,5 +88,70 @@ class PluginMarketplaceTest(unittest.TestCase):
         self.assertEqual(versions, {})
 
 
+class LauncherAdoptionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.feature = sys.modules.get("agent_assets") or load_module(
+            "agent_assets", ROOT / "features" / "agent-assets.py"
+        )
+
+    def test_manifest_resolves_declared_launcher_predecessor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = root / "assets" / "agent-assets" / "manifest.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "destinations": {},
+                        "launcher_predecessors": [
+                            {
+                                "manager": "example-bundle",
+                                "script": "../../features/agent-assets.py",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            composed = self.feature.compose_manifests([manifest])
+
+        self.assertEqual(
+            composed["launcher_predecessors"],
+            [
+                {
+                    "manager": "example-bundle",
+                    "script": str(
+                        (root / "features" / "agent-assets.py").resolve()
+                    ),
+                }
+            ],
+        )
+
+    def test_only_exact_declared_launcher_is_adoptable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            launcher = root / "agent-assets"
+            predecessor = root / "previous-agent-assets.py"
+            manager = self.feature.AgentAssets.__new__(self.feature.AgentAssets)
+            manager.launcher = launcher
+            manager.manifest = {
+                "launcher_predecessors": [
+                    {"manager": "example-bundle", "script": str(predecessor)}
+                ]
+            }
+            launcher.write_text(
+                self.feature.launcher_script("example-bundle", predecessor),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(manager.launcher_status(), "adoptable")
+
+            launcher.write_text("#!/bin/sh\necho unmanaged\n", encoding="utf-8")
+            self.assertEqual(manager.launcher_status(), "conflict")
+
+
 if __name__ == "__main__":
     unittest.main()
