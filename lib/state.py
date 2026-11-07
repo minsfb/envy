@@ -108,6 +108,26 @@ def feature_record(
     }
 
 
+def normalize_retirement(feature: dict[str, Any], definition: dict[str, Any], *, owned: bool = False) -> bool:
+    if definition.get("lifecycle") != "deprecated":
+        return False
+    before = deepcopy(feature)
+    if feature.get("origin") not in {None, definition.get("_origin", "envy-core")}:
+        raise ValueError("deprecated feature history belongs to another package")
+    eligible = (owned or feature.get("enabled") or feature.get("last_converged_at")
+                or feature.get("data") or feature.get("retirement"))
+    feature["lifecycle"] = "deprecated"
+    feature["enabled"] = False
+    if eligible:
+        progress = feature.setdefault("retirement", {"status": "pending"})
+        feature["status"] = {"retired": "retired", "failed": "retirement-failed"}.get(progress.get("status"), "retirement-pending")
+        if progress.get("status") == "retired" and progress.get("revision") != definition["retirement_revision"]:
+            feature["status"] = "retirement-pending"
+    else:
+        feature["status"] = "not-installed"
+    return before != feature
+
+
 def new_state(
     manifest_path: Path, platform: str, shell: str, root: str, preset: str
 ) -> dict[str, Any]:
@@ -139,6 +159,7 @@ def new_state(
     for name, definition in manifest["features"].items():
         enabled = definition.get("tier") == "core"
         state["features"][name] = feature_record(definition, enabled, explicit=enabled)
+        normalize_retirement(state["features"][name], definition)
     return state
 
 
@@ -242,6 +263,9 @@ def migrate_v3(
     installed = bool(state.get("installed", True))
     for name, definition in definitions.items():
         feature = features.get(name)
+        if (definition.get("lifecycle") == "deprecated" and isinstance(feature, dict)
+                and feature.get("origin") not in {None, definition.get("_origin", "envy-core")}):
+            raise ValueError("deprecated feature history belongs to another package")
         historical = detached.get(name)
         historical_matches = isinstance(historical, dict) and historical.get(
             "origin"
@@ -266,6 +290,8 @@ def migrate_v3(
             changed = True
         elif normalize_existing_feature(feature, definition, installed):
             changed = True
+        changed = normalize_retirement(features[name], definition,
+                                       owned=bool(state.get("ownership", {}).get(name))) or changed
     for name in set(features) - set(definitions):
         detached[name] = features.pop(name)
         changed = True
@@ -325,6 +351,7 @@ def migrate_legacy(
                 record[key] = previous[key]
         if previous.get("at") and "last_converged_at" not in record:
             record["last_converged_at"] = previous["at"]
+        normalize_retirement(record, definition, owned=bool(migrated["ownership"].get(name)))
         migrated["features"][name] = record
     for name, previous in old_features.items():
         if name not in definitions and isinstance(previous, dict):
@@ -403,7 +430,9 @@ def main() -> int:
                 "data": existing.get("data", {}),
             }
         )
-        if not existing["enabled"]:
+        if existing.get("lifecycle") == "deprecated":
+            existing["enabled"] = False
+        elif not existing["enabled"]:
             existing["status"] = "disabled"
         elif existing["status"] == "disabled":
             existing["status"] = "pending"

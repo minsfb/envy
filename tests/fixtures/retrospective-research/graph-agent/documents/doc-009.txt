@@ -1,0 +1,8 @@
+Tern Queue counter audit
+Record: doc-009
+Date: 2025-04-25
+Collection: Fictional queue-study archive
+
+A unique item is lost only when its stable key is absent after recovery. A repeated completion notice is a duplicate notification, not another lost item. Dividing notification counts by distinct keys answers a different question from recovery completeness.
+
+The latency worksheet [[doc-005]] used one client, batches of 100 and no induced restarts. Its 104 ms p95 cannot establish power-interruption or multi-client latency. The rollout summary [[doc-006]] combines scopes that were measured separately. The restart ledger is cataloged under Copper Pin.

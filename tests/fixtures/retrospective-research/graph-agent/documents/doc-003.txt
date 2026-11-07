@@ -1,0 +1,8 @@
+Tern Queue retry-gate design
+Record: doc-003
+Date: 2025-04-09
+Collection: Fictional queue-study archive
+
+Each queued label receives a stable item key. A retry gate ignores a repeated completion notice for the same key. This reduces duplicate notifications but cannot restore an item absent from the persisted queue. The proposed local acknowledgement path is independent of the batch-export path.
+
+Restart experiments continued under the Copper Pin campaign name after the interface was renamed. A flush marker was proposed to establish which buffered records reached durable storage. This design describes the proposal, not an installed fix. Review annotations are in [[doc-004]] and the deployment entry is [[doc-022]].

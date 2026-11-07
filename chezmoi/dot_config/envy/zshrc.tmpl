@@ -1,15 +1,18 @@
-# .zshrc — managed by envy/chezmoi
+# Interactive Zsh overlay, sourced after host .zshrc / .zlogin.
+[[ -o interactive ]] || return 0
+if [[ -o login && "${_ENVY_LOGIN_READY:-}" != 1 ]]; then return 0; fi
 # Bundle fragments live in ~/.config/envy/shell.d; machine-local additions
 # go in ~/.zshrc.local. Neither location is overwritten by the public base.
 
 export PATH="$HOME/.local/bin:$PATH"
 [[ -f {{ (joinPath .xdgConfigHome "envy/init-sh.env") | quote }} ]] && source {{ (joinPath .xdgConfigHome "envy/init-sh.env") | quote }}
-command -v mise >/dev/null && eval "$(mise activate zsh)"
 
 _nv_shell_dir={{ (joinPath .xdgConfigHome "envy/shell.d") | quote }}
 if [[ -d "$_nv_shell_dir" ]]; then
   for _nv_fragment in "$_nv_shell_dir"/*.pre.zsh(N); do source "$_nv_fragment"; done
 fi
+
+command -v mise >/dev/null && eval "$(mise activate zsh)"
 
 HISTFILE="$HOME/.zsh_history"
 HISTSIZE=1000000
@@ -62,7 +65,7 @@ fi
 unset _nv_fragment _nv_shell_dir
 
 [[ -n "${ENVY_SECRETS_FILE:-}" && -f "$ENVY_SECRETS_FILE" ]] && source "$ENVY_SECRETS_FILE"
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+[[ -f {{ (joinPath .xdgConfigHome "envy/nvm-init.zsh") | quote }} ]] && source {{ (joinPath .xdgConfigHome "envy/nvm-init.zsh") | quote }}
 
 _zp_root={{ (joinPath .xdgDataHome "envy/zsh") | quote }}
 _zp_src() { [[ -r "$_zp_root/$1/$1.zsh" ]] && { source "$_zp_root/$1/$1.zsh"; return 0; }; return 1; }
@@ -74,4 +77,8 @@ fi
 _zp_src zsh-syntax-highlighting
 unfunction _zp_src 2>/dev/null; unset _zp_root
 
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+
 [[ -f {{ (joinPath .xdgConfigHome "envy/tmux-autoattach.sh") | quote }} ]] && source {{ (joinPath .xdgConfigHome "envy/tmux-autoattach.sh") | quote }}
+
+return 0

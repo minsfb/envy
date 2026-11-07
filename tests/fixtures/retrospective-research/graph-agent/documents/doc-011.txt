@@ -1,0 +1,8 @@
+Tern Queue recovery replay
+Record: doc-011
+Date: 2025-04-27
+Collection: Fictional queue-study archive
+
+A replay of the seven absent item keys from the restart ledger reproduced the loss before the proposed flush marker was applied. The replay does not add seven more independent lost items to the cohort count. It investigates the same seven keys.
+
+The patch was evaluated only with a small local replay. That replay does not constitute a repeat of the full 2,400-item power-interruption cohort. Proposed correction details are [[doc-013]]; review interpretation is [[doc-014]]. The boundary checklist [[doc-010]] links this note.

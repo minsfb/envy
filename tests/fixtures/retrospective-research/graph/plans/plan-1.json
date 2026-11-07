@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "owner": "coordinator",
+  "items": [
+    {
+      "id": "read-hub",
+      "kind": "read",
+      "source_id": "hub"
+    },
+    {
+      "id": "read-design",
+      "kind": "read",
+      "source_id": "design"
+    },
+    {
+      "id": "read-review",
+      "kind": "read",
+      "source_id": "review"
+    }
+  ]
+}

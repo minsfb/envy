@@ -2,6 +2,20 @@
   "version": 1,
   "dependencies": [
     {
+      "name": "nvm",
+      "version": "0.40.8",
+      "node_version": "24.18.0",
+      "license": "MIT",
+      "url": "https://raw.githubusercontent.com/nvm-sh/nvm",
+      "distribution": "nvm feature; exact upstream scripts verified by SHA-256; Node binaries verified by nvm",
+      "files": {
+        "LICENSE.md": "681a12d1a1367b5890be9bc71a70466633d28fd32397be9b72d69d9bfb243492",
+        "nvm.sh": "a64806abf6aab85c456f9ffa2a3be737e35c3a1e6ac99a44ea20c69bdc923467",
+        "nvm-exec": "20786579783f26dffd0d38c0f794fb887e763df06a51ec842b2370a4fef0daca",
+        "bash_completion": "b7eb3bf03d59b61e451957b020640aa55fe8bf47fb39d85d244e259f445d2fbe"
+      }
+    },
+    {
       "name": "chezmoi",
       "version": "2.71.1",
       "license": "MIT",

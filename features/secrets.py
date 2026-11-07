@@ -154,7 +154,7 @@ def configuration() -> Configuration:
     value: Any = manifest.get("settings", {}).get("secrets", {})
     if not isinstance(value, dict):
         raise SecretError("settings.secrets must be an object")
-    unknown = set(value) - {"target", "sources", "age"}
+    unknown = set(value) - {"target", "sources", "age", "mode", "sync"}
     if unknown:
         raise SecretError(
             "settings.secrets contains unsupported fields: "
@@ -1215,6 +1215,28 @@ def doctor() -> int:
 
 def main() -> int:
     action = sys.argv[1] if len(sys.argv) > 1 else "converge"
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+    from secrets_sync.app import configured_mode, dispatch, HELP
+    from secrets_sync.errors import SyncError
+    if action in {"setup", "merge", "export"} and sys.argv[2:] in (["--help"], ["-h"]):
+        print(HELP)
+        return 0
+    if action not in {"help", "--help", "-h"} and not (
+        action in {"push-key", "pull-key"} and sys.argv[2:] in (["--help"], ["-h"])
+    ):
+        try:
+            mode = configured_mode()
+            if mode == "interactive-sync":
+                return dispatch(sys.argv[1:])
+            if action in {"setup", "merge", "export"}:
+                print("secrets: these commands require interactive-sync mode", file=sys.stderr)
+                return 2
+        except SyncError as error:
+            print(f"secrets: {error}", file=sys.stderr)
+            return error.code
+        except Exception:
+            print("secrets: invalid configuration; diagnostic details suppressed", file=sys.stderr)
+            return 2
     try:
         if action == "converge":
             return converge()
@@ -1232,6 +1254,7 @@ def main() -> int:
         if action == "pull-key":
             return pull_key(parse_key_transfer(sys.argv[2:], action))
         if action in {"help", "--help", "-h"}:
+            print(HELP)
             print(
                 "usage: envy secrets {push-key|pull-key} HOST "
                 "[--remote-path PATH] [--port PORT] [--force] [--yes] [--restore]"

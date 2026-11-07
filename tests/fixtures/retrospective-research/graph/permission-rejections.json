@@ -1,0 +1,122 @@
+{
+  "scope": "Expected helper rejections for G1/G2/G4 integration; SQL schema tests do not authenticate packet roles.",
+  "cases": [
+    {
+      "name": "reader-canonical-merge",
+      "expected_error": "permission_denied",
+      "packet": {
+        "schema_version": 1,
+        "batch_id": "reader-canonical-merge",
+        "actor_id": "reader",
+        "assignment_id": "assignment-hub",
+        "packet_kind": "observe",
+        "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+        "submitted_at": "2026-01-02T10:00:00Z",
+        "mutations": [
+          {
+            "op": "update",
+            "table": "artifacts",
+            "id": "other-review",
+            "expected_revision": 1,
+            "changes": {
+              "canonical_artifact_id": "review",
+              "canonical_basis": "Worker proposes a global merge"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reader-shared-priority",
+      "expected_error": "permission_denied",
+      "packet": {
+        "schema_version": 1,
+        "batch_id": "reader-shared-priority",
+        "actor_id": "reader",
+        "assignment_id": "assignment-hub",
+        "packet_kind": "observe",
+        "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+        "submitted_at": "2026-01-02T10:00:00Z",
+        "mutations": [
+          {
+            "op": "update",
+            "table": "work_items",
+            "id": "work-hub",
+            "expected_revision": 3,
+            "changes": {
+              "priority": 100
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reader-reconciled-acceptance",
+      "expected_error": "permission_denied",
+      "packet": {
+        "schema_version": 1,
+        "batch_id": "reader-reconciled-acceptance",
+        "actor_id": "reader",
+        "assignment_id": "assignment-hub",
+        "packet_kind": "observe",
+        "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+        "submitted_at": "2026-01-02T10:00:00Z",
+        "mutations": [
+          {
+            "op": "insert",
+            "table": "assertion_decisions",
+            "record": {
+              "decision_id": "worker-acceptance",
+              "assertion_id": "hub-trunk",
+              "disposition": "accepted",
+              "reason": "Worker attempts to accept own interpretation",
+              "actor_id": "reader",
+              "expected_revision": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "delegation-outside-branch",
+      "expected_error": "permission_denied",
+      "packet": {
+        "schema_version": 1,
+        "batch_id": "delegation-outside-branch",
+        "actor_id": "delegated-lead",
+        "assignment_id": "delegated-branch",
+        "packet_kind": "observe",
+        "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+        "submitted_at": "2026-01-02T10:00:00Z",
+        "mutations": [
+          {
+            "op": "insert",
+            "table": "actors",
+            "record": {
+              "actor_id": "outside-child",
+              "parent_actor_id": "delegated-lead",
+              "role": "reader",
+              "branch_scope": "other-branch",
+              "stage_scope": "priority"
+            }
+          }
+        ]
+      },
+      "preconditions": {
+        "registered_actor": {
+          "actor_id": "delegated-lead",
+          "parent_actor_id": "coordinator",
+          "role": "research_lead",
+          "branch_scope": "pilot",
+          "stage_scope": "priority"
+        },
+        "active_assignment": {
+          "assignment_id": "delegated-branch",
+          "actor_id": "delegated-lead",
+          "branch": "pilot",
+          "stage": "priority"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Execute a command or export the selected native Node environment.
+set -e
+ENVY_ROOT="${ENVY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+source "$ENVY_ROOT/lib/nvm.sh"
+if [[ "${1:-}" == --env-json ]]; then
+  shift
+  default=false
+  system_bin=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --default) default=true; shift ;;
+      --system-bin)
+        if [[ $# -lt 2 || -z "$2" ]]; then
+          echo 'nv-node: --system-bin requires an absolute runtime directory' >&2
+          exit 2
+        fi
+        system_bin="$2"; shift 2 ;;
+      *) echo 'usage: nv-node --env-json [--default] [--system-bin DIR]' >&2; exit 2 ;;
+    esac
+  done
+  if [[ -n "$system_bin" ]]; then
+    if [[ "$system_bin" != /* || "$system_bin" == *:* ]]; then
+      echo 'nv-node: --system-bin requires an absolute PATH directory' >&2
+      exit 2
+    fi
+    if [[ "$default" == false && -n "$(nv_node_find_project)" ]]; then
+      echo 'nv-node: explicit system selection cannot satisfy a project .nvmrc' >&2
+      exit 1
+    fi
+    backend=system
+    export PATH="$system_bin${PATH:+:$PATH}"
+  else
+    # nvm's informational output belongs on stderr; stdout is one JSON record.
+    nv_nvm_load >&2
+    if [[ "$default" == true ]]; then
+      nv_nvm_select --default >&2
+    else
+      nv_nvm_select >&2
+    fi
+    if [[ -n "${NVM_BIN:-}" ]]; then
+      backend=nvm
+      system_bin="$NVM_BIN"
+    else
+      backend=system
+      node="$(type -P node)" || exit 1
+      system_bin="${node%/*}"
+    fi
+  fi
+  exec python3 -B "$ENVY_ROOT/lib/node_env.py" "$backend" "$system_bin"
+fi
+[[ "${1:-}" != -- ]] || shift
+if [[ $# -eq 0 ]]; then
+  echo 'usage: nv-node [--] COMMAND [ARG...]' >&2
+  exit 2
+fi
+nv_nvm_load
+nv_nvm_select
+exec "$@"

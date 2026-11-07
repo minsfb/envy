@@ -3,5 +3,6 @@
 {{- $xdgData := env "XDG_DATA_HOME" -}}
 {{- if not $xdgData -}}{{- $xdgData = joinPath .chezmoi.homeDir ".local/share" -}}{{- end -}}
 [data]
+    nvmEnabled = {{ if and (env "ENVY_ROOT") (env "ENVY_STATE_FILE") }}{{ output "python3" (joinPath (env "ENVY_ROOT") "features/nvm.py") "selected" | trim }}{{ else }}false{{ end }}
     xdgConfigHome = {{ $xdgConfig | quote }}
     xdgDataHome   = {{ $xdgData | quote }}

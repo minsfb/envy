@@ -1,0 +1,8 @@
+Pilot schedule board
+Record: doc-015
+Date: 2025-05-04
+Collection: Fictional queue-study archive
+
+April filing sequence: charter, local-path design, normal-operation measurement, pilot review, restart attachment, then review addendum. The restart attachment and addendum were filed under Copper Pin rather than under the current interface title.
+
+The project record register is [[doc-001]]. The review packet's boundary checklist is [[doc-010]]. The campaign docket is [[doc-012]]. This board identifies where and when records were filed; it does not report a benchmark or decide readiness.

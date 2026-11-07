@@ -1,0 +1,7 @@
+{
+  "policy": "attested_evidence",
+  "artifact_ids": ["source-a"],
+  "record_ids": {},
+  "question_map": {"decision": "decision", "outcomes": "outcomes"},
+  "reason": "Reuse the bounded fictional source neighborhood; re-evaluate conclusions in this run."
+}

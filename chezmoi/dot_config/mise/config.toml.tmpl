@@ -5,7 +5,9 @@
 # After changing: `chezmoi apply` then `mise install`.
 
 [tools]
-node   = "24.18.0"                    # replaces nvm; projects can override via .nvmrc
+{{ if not (get . "nvmEnabled" | default false) -}}
+node   = "24.18.0"                    # enable the nvm feature to manage Node through nvm
+{{ end -}}
 bun    = "1.3.14"
 uv     = "0.11.30"                    # Astral's Python package/venv manager
 rust   = "1.97.1"                     # provides cargo + rustc + rustup

@@ -1,0 +1,8 @@
+Flush-marker correction
+Record: doc-013
+Date: 2025-04-26
+Collection: Fictional queue-study archive
+
+The proposed correction places the acknowledgement fence after a persisted flush marker. The working hypothesis is that acknowledging buffered records before the marker survives power loss explains the missing stable keys in [[doc-008]].
+
+The proposal is not an installed deployment and does not establish that the defect is fixed. A small replay is described in [[doc-011]], while the full campaign repeat remains pending in [[doc-014]]. The proposal belongs to the Copper Pin archive docket [[doc-012]].

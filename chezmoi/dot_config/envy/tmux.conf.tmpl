@@ -22,8 +22,8 @@
 {{- $bootstrapCommand = replace "\"" "\\\"" $bootstrapCommand -}}
 {{- $bootstrapCommand = replace "$" "\\$" $bootstrapCommand -}}
 {{- $bootstrapCommand = printf "\"%s\"" $bootstrapCommand -}}
-# ~/.tmux.conf - learnable tmux defaults
-# Portable: this single file is all you need. scp it to any remote host.
+# envy tmux overlay - learnable defaults
+# Sourced after the host configuration by the owned include in ~/.tmux.conf.
 # Discoverability: press  Ctrl-b Space  for an action menu, Ctrl-b ?  for a cheat sheet.
 
 # ── Sane defaults ────────────────────────────────────────────────────────────
@@ -166,3 +166,6 @@ bind -T copy-mode-vi C-c send -X copy-selection-and-cancel
 # The bootstrap is a no-op until tmux-persistence is enabled. Keeping the guard
 # here preserves this file's standalone portability on hosts without envy.
 if-shell {{ $bootstrapTest }} { run-shell {{ $bootstrapCommand }} }
+
+# Machine-local overrides run after all managed settings.
+source-file -q ~/.tmux.conf.local

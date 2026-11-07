@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "distribution_feature": "agent-assets",
   "destinations": {
     "claude": {
@@ -18,6 +18,9 @@
       "path": "agent-assets/skills",
       "targets": ["claude", "codex"]
     }
+  ],
+  "skill_contracts": [
+    {"group": "common", "name": "pr-triage", "version": 1}
   ],
   "agent_groups": [
     {

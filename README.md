@@ -134,21 +134,47 @@ register as drift and converge on a plain `envy upgrade`.
 
 ### Shell fragments
 
-The managed `.zshrc` and `.bashrc` stay small and portable. Everything
-environment-specific loads from `~/.config/envy/shell.d`, which is applied
-by Chezmoi like any other managed path:
+Envy preserves the host's `.bashrc`, `.zshrc`, and `.tmux.conf`, owning only a
+marked include at the end of each. Chezmoi manages the included `bashrc`,
+`zshrc`, and `tmux.conf` under `~/.config/envy`. Login shells defer the interactive
+overlay until the end of the active Bash profile or Zsh `.zlogin`, so host login
+settings finish before managed overrides. Noninteractive commands should use
+`envy exec`; they do not initialize the interactive overlay.
 
-- `*.pre.zsh` and `*.pre.bash` load early, before history, prompt, and aliases,
-  for anything later configuration depends on, such as proxy variables.
+Everything environment-specific loads from `~/.config/envy/shell.d`, which is
+applied by Chezmoi like any other managed path:
+
+- `*.pre.zsh` and `*.pre.bash` load before tool initialization, history, prompt,
+  and aliases, but after host startup.
 - `*.zsh` and `*.bash` load late, for aliases and helper functions.
-- Any other suffix, such as `.sh`, is ignored by both loaders and is useful for
-  a shared body that a `.pre.zsh` and a `.pre.bash` fragment both source.
+- Other suffixes, such as `.sh`, are ignored by both loaders and can hold shared
+  code that a Bash or Zsh fragment sources.
 
-Machine-local additions still belong in `~/.zshrc.local` or `~/.bashrc.local`,
-which envy never overwrites. Fragments carrying organization-internal detail
-belong in a bundle rather than in envy.
+Machine-local additions belong in `~/.zshrc.local`, `~/.bashrc.local`, or
+`~/.tmux.conf.local`, which load last and are never overwritten. Organization
+configuration belongs in a bundle rather than in envy.
+See [startup ownership and migration](docs/startup-integration.md).
 
 ### Tool provisioning
+
+For noninteractive deployment, service setup, and commands launched through a
+long-lived transport, use `envy exec -- COMMAND [ARG...]`. It loads the latest
+generated `init-sh.env`, adds Envy's user-bin directory, and executes the command
+with its original arguments, stdin, working directory, and exit status. It does
+not install anything, take the lifecycle lock, load shell profiles or decrypted
+secrets, or activate Mise shims. Use explicit pinned launchers or `mise exec`
+when a tool needs version selection. Missing generated environment fails closed;
+create it with the normal install/upgrade workflow first. Existing processes
+keep their old environment until their normal setup/restart workflow is run.
+
+Feature `env` entries support `PATH+` (append) and `PATH^` (prepend), each a
+directory or an ordered array of directories. Use `PATH^` only when a feature
+intentionally owns command selection ahead of inherited/system tools. Arrays
+preserve their order; later features' prepend groups take precedence. Disabled
+or unconverged features contribute neither. Portable bundles require both kinds
+of absolute path to stay inside their package and name existing directories.
+`envy exec` removes duplicate entries while preserving first occurrence.
+Upgrade the Envy checkout before using a bundle that declares `PATH^`.
 
 Chezmoi and Mise are used as found when they are already installed. When a tool
 is missing, `pkg_ensure` resolves it in order: the exact pinned release recorded
@@ -248,6 +274,30 @@ terminals. It depends on `tmux-persistence` and `remote-development`, adds an
 `Envy Remote (tmux)` terminal profile, and uses a bounded workspace-derived
 session name. Envy leaves existing tmux sessions running when the profile or
 editor server is removed.
+
+### Independent review records
+
+The shared `review` skill provides an offline commit-bound controller for
+explicitly requested independent review rounds. It records immutable input
+digests, identity/evidence provenance, findings, and interrupted attempts.
+Version 2 adds reviewer-led teams, derived coverage obligations, and separate
+coordinator decisions while preserving existing v1 histories; a v2 ledger does
+not accept a later v1 candidate. Version 3 explicitly adds
+[same-session synthesis continuation](assets/agent-assets/skills/review/references/continuation.md)
+for interrupted leads, retaining original attempts and unchanged researcher
+records. It does not retroactively enable continuation of v1/v2 candidates or
+authorize additional provider work. Native/manual
+reviewers remain external adapters. The controller assumes no model pair,
+provider launcher, or publication authority; overridable reviewer defaults belong
+to the public skill, along with the baseline checklist and interactive versus
+autonomous entry behavior. These are configurable workflow defaults, not
+hardcoded schema constraints. Organization-specific availability/access bindings
+and launch-evidence integration stay in private adapters behind generic extension
+points. See the
+[review bundle procedure](assets/agent-assets/skills/review/references/review-bundle.md),
+[team protocol](assets/agent-assets/skills/review/references/team-review.md),
+[checklist](assets/agent-assets/skills/review/references/checklist.md), and
+[model-selection defaults](assets/agent-assets/skills/review/references/model-selection.md).
 
 ### Smart merge and managed files
 
@@ -463,6 +513,11 @@ detach is also journaled in this file and is visible in `envy status`.
 
 ## Development
 
+Bundles can opt into [interactive secrets sync](docs/secrets-sync.md) for
+explicit, per-entry `envy secrets setup|merge|export` operations. The default
+secrets mode remains recovery; interactive mode never unlocks during startup or
+routine convergence.
+
 ### Adding A Feature
 
 Add generic, portable features to `envy.json`; keep organization-, team-,
@@ -487,7 +542,9 @@ dependencies, environment values, and structured lifecycle handlers:
 ```
 
 Handlers run from their owning package root with `ENVY_FEATURE` and
-`ENVY_FEATURE_ROOT` set. Convergence and non-purge removal must be idempotent
+`ENVY_FEATURE_ROOT` set. The CLI prepends `ENVY_BIN_DIR` (default
+`~/.local/bin`) to `PATH`, including during a fresh install before the generated
+environment exists. Convergence and non-purge removal must be idempotent
 because interrupted bundle transactions may retry a handler. Verification must
 be read-only, diagnosis should explain actionable drift, and removal must
 delete only owned state while honoring `ENVY_DRY_RUN` and `ENVY_PURGE`.
@@ -495,6 +552,12 @@ delete only owned state while honoring `ENVY_DRY_RUN` and `ENVY_PURGE`.
 Add non-core defaults to `recommended_features` when the recommended preset
 should select them. Document the feature in the table above and add a focused
 test.
+
+For an installed feature that is being retired, retain a
+[Deprecated definition](docs/feature-retirement/README.md). Compatible upgrades
+clean only its owned integration, preserve user data and track verified retirement
+without enabling or depending on a replacement. Bundle schema 2 explicitly
+requires the `feature-retirement-v1` capability; older cores refuse it safely.
 
 ### Adding A Bundle
 
@@ -548,6 +611,75 @@ python3 lib/manifest.py compose \
 Use a temporary `HOME` and XDG state directories for full bundle tests. Bundle
 paths and hashes become persistent installation state, so move or replace a
 configured bundle deliberately.
+
+The public agent-asset manifest uses version 2 and declares `common / pr-triage / 1`
+for both Claude and Codex. Public-only fresh installation is supported. Migration
+from a bundle's existing generic skill requires a compatible paired activation
+release; see [the handoff contract](docs/agent-assets-handoff.md). Source publication
+does not authorize managed activation or establish that an active harness reloaded.
+The public `agent-assets` feature is Unix-scoped. Any v2 manifest promotes the
+whole composed asset selection, including ordinary v1 bundle assets, to strict
+recorded-link ownership. Ordinary nonpending convergence can recreate an absent,
+still-selected ordinary link; changed entries and protected pairs require
+reconciliation. See the handoff guide for inspection, cleanup and platform limits.
+Ordinary v2 updates and removal checkpoint intent/progress before payload changes;
+an interrupted operation resumes only its recorded action and exact selection.
+Status, verify and doctor report a validated pending operation before resolving
+current manifests or discovering sources. The launcher must be disjoint from
+asset destinations and their required directories before any checkpoint or mutation.
+All required checkpoint serialized-size capacity is admitted first; see the
+handoff guide for disk-space and durability limits. Unknown staging and foreign
+entries remain refusals, and completed ownership retains the existing v2 shape.
+Even after removing all recorded payloads, v2 removal retains the ownership
+ledger (including handoff provenance) and lock sidecar.
+Protected source relocation is not automatic: moving an installer can also make
+its old launcher unrecognizable. The guide distinguishes narrowly supported
+feature-wide cleanup from restoring trusted sources at their canonical prefix.
+
+### Optional nvm runtime
+
+Enable `nvm` to use pinned upstream nvm and a pinned default Node in `~/.nvm`
+(`ENVY_NVM_DIR` can select a dedicated alternative). Versions and source checksums
+live in `dependencies.json`. Envy owns the nvm scripts/default alias; nvm owns
+Node installations. Mise continues managing other tools and omits its global
+Node entry when this feature is enabled. Existing Node installations and global
+packages are retained, and adopted scripts/default aliases are backed up.
+
+Managed Bash/Zsh selects the nearest `.nvmrc`, otherwise the default. Missing
+project versions require an explicit `nvm install`; startup never downloads.
+The generated environment prefixes the configured default's native bin directory
+while `nvm` is enabled and current. Ordinary `npm` resolves to that native
+executable in `envy exec` and inherited processes; no npm wrapper is installed.
+For noninteractive use, `nv-node node ...` and `nv-node npm ...` perform the same
+selection without relying on shell startup. Controlled launchers can use
+`nv-node --env-json [--default] [--system-bin DIR]` to prepare a runtime and
+receive one JSON record. Version 1 contains `version`, `backend`, absolute
+`node`/`npm` executable paths, `node_version`, `npm_version`, and `env`. Only
+`PATH` and applicable `NVM_DIR`/`NVM_BIN` are exported; unrelated consumer
+environment is preserved by applying that map. `--default` ignores project
+requirements. An explicit system bin must contain matching native Node/npm;
+without `--default`, a project `.nvmrc` is refused. Export never downloads, and
+failure emits no success record. `envy doctor nvm` verifies the pin.
+
+An enabled, current feature may record verified selection in
+`data.node_runtime` with exactly `backend` (`nvm` or `system`) and `bin` (an
+absolute runtime directory without traversal, PATH separators, or control
+characters). The environment renderer prefixes that directory and exports
+`ENVY_NODE_BACKEND`/`ENVY_NODE_BIN`. Feature records follow manifest order after
+the core default, so a bundle's explicit selection takes precedence. Managed
+nvm shell hooks honor a selected system backend.
+Features may also record `data.environment_defaults`, a map of nonsecret
+variable names to scalar strings. Defaults apply only while the feature is
+enabled and current, and only when the caller's value is empty or unset. PATH,
+home/workspace variables, nvm selection, and `ENVY_`/`XDG_` identity variables
+cannot be supplied through this map. Values are quoted as data; credentials
+must never be recorded here.
+Network trust and private registries belong in environment bundles, not core.
+
+### Developer Workflow Skills
+
+See [the workflow guide](docs/developer-workflow.md) for intent routing,
+proportionate execution, native procedures, and paired bundle migration.
 
 ### Testing
 

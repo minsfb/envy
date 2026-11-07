@@ -130,6 +130,7 @@ else: print(value)
 }
 
 nv_feature_tier() { nv_feature_get "$1" tier 2>/dev/null || echo optional; }
+nv_feature_deprecated() { [[ "$(nv_feature_get "$1" lifecycle 2>/dev/null || echo active)" == deprecated ]]; }
 nv_feature_default_enabled() {
   local feature="$1"
   [[ "$(nv_feature_get "$feature" default_enabled 2>/dev/null || echo false)" == true ]] && return 0
@@ -194,5 +195,9 @@ nv_run_feature_handler() {
 }
 
 nv_verify_feature() {
+  if nv_feature_deprecated "$1"; then
+    ENVY_PURGE=false ENVY_DRY_RUN=0 nv_run_feature_handler "$1" verify_retired
+    return $?
+  fi
   nv_run_feature_handler "$1" verify
 }

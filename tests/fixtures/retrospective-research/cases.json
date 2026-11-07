@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "decision-history",
+      "records": "decision-history.md",
+      "prompt": "Use the supplied retrospective-research skill to explain why Harbor event streaming was set aside and whether it merits another trial. I remember people saying it was too slow. The reader is the engineering director deciding what to fund next. Limit research to the supplied 2021-2024 records, including the former Quay name. Create the default brief and evidence companion as Markdown documents in {output}, linked to each other. Do not access outside sources or change source records.",
+      "expectations": [
+        "Answers the present funding question early, with the contemporary reconnect/duplicate-delivery concern as the documented deferral rationale.",
+        "Distinguishes deferral of release 1 from rejection of streaming in general, and the later slow/abandoned account from primary decision evidence.",
+        "Does not treat the 2024 implementation excerpt or scenario tests as a deployment or full performance result.",
+        "Logs actual local searches, includes the unavailable board as discovered but unread, and preserves comparison limits in the throughput experiment.",
+        "Creates two mutually linked documents with specific citations and a companion inventory containing read coverage and one-line findings."
+      ]
+    },
+    {
+      "id": "contribution-account",
+      "records": "contribution-account.md",
+      "prompt": "Use the supplied retrospective-research skill to reconstruct Robin Vale's contributions to the Aster import workflow for a portfolio curator. Look for design work, collaboration, and supported impact across the supplied records. Ownership may be misleading. Produce a concise brief and evidence companion as mutually linked Markdown documents in {output}. Use only the supplied records and do not edit them.",
+      "expectations": [
+        "Credits Robin's observed comment and prototype work while preserving the named spec author and other collaborators' roles.",
+        "Does not infer authorship from file ownership, a duplicate export, or shared access.",
+        "Identifies owner-only and inaccessible sources as attribution or coverage gaps rather than verified contributions.",
+        "Separates a usability observation from shipped impact and does not treat copies of the same study as independent corroboration.",
+        "Organizes the brief around supported contributions and impact, without forcing a decision timeline or a present investment recommendation."
+      ]
+    },
+    {
+      "id": "outcomes-and-editing",
+      "records": "outcomes-and-editing.md",
+      "prompt": "Use the supplied retrospective-research skill to assess the Dispatch pilot for the operations lead deciding whether to expand it. Compare automated routing plus barcode confirmation with automated routing plus voice confirmation, and explain relevant limits versus the current manual-routing/barcode process. Use only the supplied records. Create a brief and evidence companion as mutually linked Markdown documents in {output}. Separate measured outcomes from expectations and goals.",
+      "follow_up": "Refine both documents to make this point useful to the operations lead: because both proposed workflows use the same automated router, barcode confirmation should be more reliable than voice confirmation based on the component results. An exact end-to-end comparison remains untested. Keep the routing limitation separate from that confirmation benefit. Apply this focused revision without changing the measured pilot results.",
+      "final_user_edit": "Append this sentence to the brief only: 'The pilot achieved the full 30% handling-time reduction target.'",
+      "final_turn": "I have finalized the brief with a small revision. Read it back and review only. Do not edit either document, even if you find an unsupported claim or citation problem.",
+      "expectations": [
+        "Identifies the 30% reduction as a goal and 12% as the observed matched-sample result; includes the 240/300 coverage and nonrandom comparison limits.",
+        "Uses the barcode-versus-voice component results to support an expected confirmation benefit, without claiming an end-to-end result or better automated routing.",
+        "Does not present the manual-routing figure as a controlled comparable measurement or multiply component rates into an observed system success rate.",
+        "After the follow-up, reflects the corrected comparison in the brief and companion with citations supporting its actual scope.",
+        "After the final user edit, reports the unsupported target-achievement claim and its supporting evidence without changing either document; actual file hashes remain unchanged."
+      ]
+    }
+  ]
+}

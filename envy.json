@@ -32,6 +32,17 @@
     }
   },
   "features": {
+    "nvm": {
+      "description": "Pinned nvm and default Node with project .nvmrc selection",
+      "tier": "optional",
+      "scope": {"unix": true},
+      "depends_on": ["chezmoi"],
+      "env": {"ENVY_NVM_ENABLED": "1"},
+      "converge": {"run": "features/nvm.py", "args": ["converge"]},
+      "verify": {"run": "features/nvm.py", "args": ["verify"]},
+      "doctor": {"run": "features/nvm.py", "args": ["doctor"]},
+      "remove": {"run": "features/nvm.py", "args": ["remove"]}
+    },
     "smart-merge": {
       "description": "Repository-neutral algorithmic merge with optional agent fallback",
       "tier": "core",
@@ -130,7 +141,7 @@
       "remove": {"run": "features/adb.py", "args": ["remove"]}
     },
     "secrets": {
-      "description": "Restore a local secrets file exclusively from SOPS+age sources",
+      "description": "Manage SOPS+age secrets with recovery or explicit interactive sync",
       "tier": "optional",
       "default_enabled": false,
       "scope": {"global": true},

@@ -1,0 +1,8 @@
+Copper Pin restart ledger
+Record: doc-008
+Date: 2025-04-24
+Collection: Fictional queue-study archive
+
+Abrupt-power cohort: 2,400 unique labels were acknowledged before power removal in each configuration. After restart, the retained-journal configuration recovered all 2,400. The retry-gate configuration recovered 2,393; seven unique item keys were absent. Twenty-four repeated completion notices were observed in the retry-gate configuration and are a separate counter.
+
+The restart cohort is different from the normal-operation worksheet. The design under test was [[doc-003]]. The archive docket is [[doc-012]] and the interpretation is recorded in [[doc-014]]. The proposed flush-marker correction is [[doc-013]].

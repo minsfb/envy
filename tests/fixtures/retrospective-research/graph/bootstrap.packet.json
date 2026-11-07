@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "batch_id": "bootstrap",
+  "actor_id": "coordinator",
+  "assignment_id": null,
+  "packet_kind": "bootstrap",
+  "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+  "submitted_at": "2026-01-02T10:00:00Z",
+  "mutations": [
+    {
+      "op": "insert",
+      "table": "actors",
+      "record": {
+        "actor_id": "coordinator",
+        "parent_actor_id": null,
+        "role": "coordinator"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "actors",
+      "record": {
+        "actor_id": "reader",
+        "parent_actor_id": "coordinator",
+        "role": "reader",
+        "branch_scope": "pilot"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "actors",
+      "record": {
+        "actor_id": "reviewer",
+        "parent_actor_id": "coordinator",
+        "role": "evidence_reviewer",
+        "branch_scope": "pilot"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "contract_snapshots",
+      "record": {
+        "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+        "contract_revision": 1,
+        "relative_path": "contracts/contract-1.json"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "plan_snapshots",
+      "record": {
+        "plan_sha256": "b0ccf1b1d00389dfe8f43a526f71856c7ed1df16ef017dd58316979274b35be2",
+        "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+        "relative_path": "plans/plan-1.json"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "plan_items",
+      "record": {
+        "plan_sha256": "b0ccf1b1d00389dfe8f43a526f71856c7ed1df16ef017dd58316979274b35be2",
+        "plan_item_id": "read-hub"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "plan_items",
+      "record": {
+        "plan_sha256": "b0ccf1b1d00389dfe8f43a526f71856c7ed1df16ef017dd58316979274b35be2",
+        "plan_item_id": "read-design"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "plan_items",
+      "record": {
+        "plan_sha256": "b0ccf1b1d00389dfe8f43a526f71856c7ed1df16ef017dd58316979274b35be2",
+        "plan_item_id": "read-review"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "questions",
+      "record": {
+        "question_id": "decision",
+        "text": "What was approved and deferred?",
+        "central": 1,
+        "contract_revision": 1
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifacts",
+      "record": {
+        "artifact_id": "hub",
+        "title": "Orchard index",
+        "artifact_type": "document"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifact_keys",
+      "record": {
+        "namespace": "archive-file",
+        "external_id": "hub",
+        "artifact_id": "hub",
+        "basis": "Stable fictional file ID"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "discoveries",
+      "record": {
+        "discovery_id": "seed-hub",
+        "artifact_id": "hub",
+        "supplied_seed_id": "intake-hub",
+        "observed_title": "Orchard index"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifacts",
+      "record": {
+        "artifact_id": "design",
+        "title": "Pilot design",
+        "artifact_type": "document"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifact_keys",
+      "record": {
+        "namespace": "archive-file",
+        "external_id": "design",
+        "artifact_id": "design",
+        "basis": "Stable fictional file ID"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "discoveries",
+      "record": {
+        "discovery_id": "seed-design",
+        "artifact_id": "design",
+        "supplied_seed_id": "intake-design",
+        "observed_title": "Pilot design"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifacts",
+      "record": {
+        "artifact_id": "review",
+        "title": "Pilot review",
+        "artifact_type": "document"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifact_keys",
+      "record": {
+        "namespace": "archive-file",
+        "external_id": "review",
+        "artifact_id": "review",
+        "basis": "Stable fictional file ID"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "discoveries",
+      "record": {
+        "discovery_id": "seed-review",
+        "artifact_id": "review",
+        "supplied_seed_id": "intake-review",
+        "observed_title": "Pilot review"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifacts",
+      "record": {
+        "artifact_id": "other-review",
+        "title": "Pilot review",
+        "artifact_type": "document"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifact_keys",
+      "record": {
+        "namespace": "archive-file",
+        "external_id": "other-review",
+        "artifact_id": "other-review",
+        "basis": "Stable fictional file ID"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "discoveries",
+      "record": {
+        "discovery_id": "seed-other-review",
+        "artifact_id": "other-review",
+        "supplied_seed_id": "intake-other-review",
+        "observed_title": "Pilot review"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifacts",
+      "record": {
+        "artifact_id": "measurements",
+        "title": "Pilot measurements",
+        "artifact_type": "document"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifact_keys",
+      "record": {
+        "namespace": "archive-file",
+        "external_id": "measurements",
+        "artifact_id": "measurements",
+        "basis": "Stable fictional file ID"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "discoveries",
+      "record": {
+        "discovery_id": "seed-measurements",
+        "artifact_id": "measurements",
+        "supplied_seed_id": "intake-measurements",
+        "observed_title": "Pilot measurements"
+      }
+    }
+  ]
+}

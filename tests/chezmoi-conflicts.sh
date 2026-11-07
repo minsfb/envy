@@ -190,4 +190,13 @@ grep -qF 'Merge is available only for regular-file targets.' "$TEMP/symlink.out"
 [[ ! -L "$HOME_DIR/.linkmerge" ]] || fail 'overwrite did not replace target symlink'
 grep -q '^outside$' "$TEMP/outside" || fail 'merge followed and changed a target symlink'
 
+mkdir -p "$SOURCE/dot_pi/agent" "$HOME_DIR/.pi/agent/skills/custom"
+cp "$ROOT/chezmoi/dot_pi/agent/symlink_skills.tmpl" "$SOURCE/dot_pi/agent/"
+printf 'user Pi skill\n' >"$HOME_DIR/.pi/agent/skills/custom/SKILL.md"
+run_prompt 1 "$TEMP/pi-skills-skip.out" s
+[[ ! -L "$HOME_DIR/.pi/agent/skills" ]] \
+  || fail 'existing Pi skill directory was replaced without confirmation'
+grep -q '^user Pi skill$' "$HOME_DIR/.pi/agent/skills/custom/SKILL.md" \
+  || fail 'existing Pi skill contents were changed'
+
 echo 'envy chezmoi conflict tests passed'

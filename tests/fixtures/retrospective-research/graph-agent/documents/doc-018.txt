@@ -1,0 +1,8 @@
+Tern Queue pilot review
+Record: doc-018
+Date: 2025-04-19
+Collection: Fictional queue-study archive
+
+Exhibit team review of the paper-token queue game for a small display. The review approves the size of printed cards and the arrangement of the demonstration table. “Tern Queue” is the exhibit's caption.
+
+No software queue, persistence behavior, restart experiment or transport latency was evaluated. The exhibit's invitation wording is [[doc-019]]. The shared-title collision is listed in [[doc-016]].

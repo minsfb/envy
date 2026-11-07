@@ -15,7 +15,8 @@ from typing import Any
 
 FEATURE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ENVIRONMENT_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-HANDLERS = ("converge", "verify", "doctor", "remove")
+HANDLERS = ("converge", "verify", "doctor", "remove", "retire", "verify_retired")
+CAPABILITIES = {"feature-retirement-v1", "secrets-fleet-v1", "startup-includes-v1"}
 RESERVED_ENVIRONMENT = {
     "HOME",
     "ENVY_DIR",
@@ -163,18 +164,19 @@ def validate_portable_feature(name: str, value: dict[str, Any], root: Path) -> N
     environment = value.get("env", {})
     if not isinstance(environment, dict):
         return
-    raw_paths = environment.get("PATH+", [])
-    values = raw_paths if isinstance(raw_paths, list) else [raw_paths]
-    for raw in values:
-        if not isinstance(raw, str):
-            continue
-        path = Path(raw).expanduser()
-        if path.is_absolute():
-            require_contained(path.resolve(), root, f"PATH entry for {name}")
-            if not path.is_dir():
-                raise ManifestError(
-                    f"portable PATH entry for {name} is missing: {path}"
-                )
+    for key in ("PATH+", "PATH^"):
+        raw_paths = environment.get(key, [])
+        values = raw_paths if isinstance(raw_paths, list) else [raw_paths]
+        for raw in values:
+            if not isinstance(raw, str):
+                continue
+            path = Path(raw).expanduser()
+            if path.is_absolute():
+                require_contained(path.resolve(), root, f"PATH entry for {name}")
+                if not path.is_dir():
+                    raise ManifestError(
+                        f"portable PATH entry for {name} is missing: {path}"
+                    )
 
 
 def validate_feature(name: str, value: dict[str, Any]) -> None:
@@ -205,18 +207,56 @@ def validate_feature(name: str, value: dict[str, Any]) -> None:
         values = raw if isinstance(raw, list) else [raw]
         if (
             not isinstance(key, str)
-            or (key != "PATH+" and not ENVIRONMENT_KEY.fullmatch(key))
+            or (key not in {"PATH+", "PATH^"} and not ENVIRONMENT_KEY.fullmatch(key))
             or not values
             or not all(isinstance(item, str) for item in values)
         ):
             raise ManifestError(f"feature '{name}' has an invalid environment value")
-        if key != "PATH+" and isinstance(raw, list):
+        if key not in {"PATH+", "PATH^"} and isinstance(raw, list):
             raise ManifestError(
                 f"feature '{name}' environment key '{key}' must be scalar"
             )
     for key in ("default_enabled", "reconcile_after_selection_change"):
         if key in value and not isinstance(value[key], bool):
             raise ManifestError(f"feature '{name}' field '{key}' must be boolean")
+    lifecycle = value.get("lifecycle", "active")
+    if not isinstance(lifecycle, str) or lifecycle not in {"active", "deprecated"}:
+        raise ManifestError(f"feature '{name}' has invalid lifecycle")
+    retirement_fields = {"retirement_revision", "retirement_inputs", "retire", "verify_retired", "replacement"}
+    if lifecycle == "active":
+        if retirement_fields & value.keys():
+            raise ManifestError(f"active feature '{name}' cannot declare retirement fields")
+        return
+    revision = value.get("retirement_revision")
+    if not isinstance(revision, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", revision):
+        raise ManifestError(f"deprecated feature '{name}' requires a retirement revision")
+    if (value.get("tier") == "core" or dependencies or environment
+            or value.get("default_enabled") or value.get("reconcile_after_selection_change")
+            or any(key in value for key in ("converge", "verify", "doctor", "remove"))):
+        raise ManifestError(f"deprecated feature '{name}' cannot declare active integration")
+    if "replacement" in value and (not isinstance(value["replacement"], str)
+                                    or not FEATURE_ID.fullmatch(value["replacement"])):
+        raise ManifestError(f"deprecated feature '{name}' has invalid replacement guidance")
+    root = Path(value.get("_root", ".")).resolve()
+    for action in ("retire", "verify_retired"):
+        handler = value.get(action)
+        validate_handler(name, action, handler)
+        path = resolved_run(handler, root)
+        if path is None:
+            raise ManifestError(f"{name}.{action} must use package-owned run")
+        require_contained(path, root, f"handler {name}.{action}")
+        if not path.is_file():
+            raise ManifestError(f"retirement handler is missing for '{name}'")
+    inputs = value.get("retirement_inputs", [])
+    if not isinstance(inputs, list) or not all(isinstance(item, str) for item in inputs):
+        raise ManifestError(f"'{name}' retirement_inputs must be file paths")
+    for raw in inputs:
+        path = (root / raw).resolve()
+        if Path(raw).is_absolute():
+            raise ManifestError(f"'{name}' retirement_inputs must be relative")
+        require_contained(path, root, f"retirement input for {name}")
+        if not path.is_file():
+            raise ManifestError(f"retirement input is missing for '{name}'")
 
 
 def order_features(features: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -228,6 +268,9 @@ def order_features(features: dict[str, dict[str, Any]]) -> dict[str, dict[str, A
                 f"feature '{name}' depends on unknown features: "
                 + ", ".join(sorted(unknown))
             )
+        if any(features[dependency].get("lifecycle") == "deprecated"
+               for dependency in definition.get("depends_on", [])):
+            raise ManifestError(f"feature '{name}' cannot depend on a deprecated feature")
 
     ordered: dict[str, dict[str, Any]] = {}
     visiting: list[str] = []
@@ -263,7 +306,7 @@ def compose(core_path: Path, bundle_args: list[str]) -> dict[str, Any]:
     )
 
     core = sources[0][1]
-    if core.get("version") != 3:
+    if core.get("version") not in (3, 4):
         raise ManifestError(f"unsupported core manifest version in {core_path}")
 
     workspace_root = core_root
@@ -309,8 +352,14 @@ def compose(core_path: Path, bundle_args: list[str]) -> dict[str, Any]:
         bundle_version = value.get("bundle_version", value.get("version"))
         if not isinstance(bundle_id, str) or not bundle_id:
             raise ManifestError(f"manifest id is required: {path}")
-        if not is_core and value.get("version") != 1:
+        if not is_core and value.get("version") not in (1, 2):
             raise ManifestError(f"unsupported bundle manifest version in {path}")
+        required = value.get("requires", [])
+        if (not isinstance(required, list) or not all(isinstance(item, str) for item in required)
+                or set(required) - CAPABILITIES):
+            raise ManifestError(f"unsupported manifest capabilities in {path}")
+        if required and value.get("version") == 1:
+            raise ManifestError(f"manifest capabilities require bundle version 2 in {path}")
         portable = value.get("portable", is_core)
         if not isinstance(portable, bool):
             raise ManifestError(f"portable must be boolean in {path}")
@@ -362,6 +411,11 @@ def compose(core_path: Path, bundle_args: list[str]) -> dict[str, Any]:
             normalized = expand_tree(definition, root, core_root, workspace_root)
             normalized["_origin"] = bundle_id
             normalized["_root"] = str(root)
+            if normalized.get("lifecycle") == "deprecated":
+                if ((is_core and value.get("version") != 4)
+                        or (not is_core and (value.get("version") != 2
+                            or "feature-retirement-v1" not in required))):
+                    raise ManifestError(f"deprecated feature '{name}' requires retirement-capable manifest")
             for action in HANDLERS:
                 if action in normalized:
                     validate_handler(name, action, normalized[action])
@@ -452,6 +506,9 @@ def compose(core_path: Path, bundle_args: list[str]) -> dict[str, Any]:
     for old, new in result["aliases"].items():
         if new not in result["features"]:
             raise ManifestError(f"alias '{old}' targets unknown feature '{new}'")
+        if (result["features"][new].get("lifecycle") == "deprecated"
+                or result["features"].get(old, {}).get("lifecycle") == "deprecated"):
+            raise ManifestError("aliases cannot bypass deprecated feature history")
     unknown_recommended = set(result["recommended_features"]) - set(result["features"])
     if unknown_recommended:
         raise ManifestError(
@@ -460,6 +517,9 @@ def compose(core_path: Path, bundle_args: list[str]) -> dict[str, Any]:
         )
     if len(result["recommended_features"]) != len(set(result["recommended_features"])):
         raise ManifestError("recommended_features contains duplicates")
+    if any(result["features"][name].get("lifecycle") == "deprecated"
+           for name in result["recommended_features"]):
+        raise ManifestError("recommended_features cannot select deprecated features")
     unknown_doctors = set(result["doctor_aliases"].values()) - set(result["features"])
     if unknown_doctors:
         raise ManifestError(

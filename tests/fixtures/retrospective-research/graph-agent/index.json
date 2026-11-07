@@ -1,0 +1,493 @@
+{
+  "fixture_format": "research-graph-agent-corpus",
+  "schema_version": 1,
+  "corpus_id": "tern-queue-v1",
+  "fictional": true,
+  "description": "Small offline archive for research graph agent-protocol trials. Provider data only; evaluator judgments are not bundled.",
+  "artifacts": [
+    {
+      "artifact_id": "doc-001",
+      "title": "Tern Queue record register",
+      "document_kind": "register",
+      "published_at": "2025-05-20T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-001.txt",
+      "sha256": "4c4afd9c439ffe6c4ac6ea4e89aef531b875bb231d4764bf5ffc68417a0f2e5b",
+      "bytes": 699,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-002",
+      "title": "Tern Queue pilot charter",
+      "document_kind": "charter",
+      "published_at": "2025-04-01T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-002.txt",
+      "sha256": "d217c8056d66eabee9b3e780236fceaa280ca1820e0d4645f64ba1e00411855e",
+      "bytes": 670,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-003",
+      "title": "Tern Queue retry-gate design",
+      "document_kind": "design",
+      "published_at": "2025-04-09T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-003.txt",
+      "sha256": "7fe38770bfd95ffd27505321e573137d76b3289f23867163befb0601aa3ae645",
+      "bytes": 722,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-004",
+      "title": "Tern Queue pilot review",
+      "document_kind": "review",
+      "published_at": "2025-04-18T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-004.txt",
+      "sha256": "9a18a097e6699fa9130c1c8586e4a7f0417d3bc4f7cec55a433a1e88a09d808d",
+      "bytes": 695,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-005",
+      "title": "Tern Queue latency worksheet",
+      "document_kind": "worksheet",
+      "published_at": "2025-04-16T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-005.txt",
+      "sha256": "9b18ab351f3dffa4bd407fb8160e68d3bfb3a900316a7e6bb7dcd9f2a827e3f4",
+      "bytes": 625,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-006",
+      "title": "Tern Queue rollout summary",
+      "document_kind": "status-note",
+      "published_at": "2025-04-21T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-006.txt",
+      "sha256": "152b4b9a1f25b1c03ee6a170d420c44df111e19112e90b5906063c8b24316c64",
+      "bytes": 573,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-007",
+      "title": "Tern Queue fallback decision",
+      "document_kind": "decision",
+      "published_at": "2025-05-02T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-007.txt",
+      "sha256": "925891939e84993d82adfbd90c9a83c1803011edd058ced3394b366d4aed13ee",
+      "bytes": 617,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-008",
+      "title": "Copper Pin restart ledger",
+      "document_kind": "experiment-ledger",
+      "published_at": "2025-04-24T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-008.txt",
+      "sha256": "19f52cde1996fa03438f3e2c6af21b2f689bcac660132523ec0937edbb6eb08c",
+      "bytes": 719,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-009",
+      "title": "Tern Queue counter audit",
+      "document_kind": "audit",
+      "published_at": "2025-04-25T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-009.txt",
+      "sha256": "5a2b4c431f0ead7da278f702017b4cca33e2cb1fdd3f8116744b894a27bd06d7",
+      "bytes": 655,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-010",
+      "title": "Tern Queue boundary checklist",
+      "document_kind": "checklist",
+      "published_at": "2025-05-03T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-010.txt",
+      "sha256": "d54f7fb1f8b90e5d7750125b6d496910f589562b17c765329fec519a136269e7",
+      "bytes": 632,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-011",
+      "title": "Tern Queue recovery replay",
+      "document_kind": "replay-note",
+      "published_at": "2025-04-27T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-011.txt",
+      "sha256": "a81a70787f4dffdf5e46c917fc78fafdafd6e831f30aa436ad0c96852810b735",
+      "bytes": 631,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-012",
+      "title": "Copper Pin archive docket",
+      "document_kind": "docket",
+      "published_at": "2025-04-28T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-012.txt",
+      "sha256": "6e714f068a6c237baa379dd396c88f225758b1b5e28c05a869e1834f9ef380d5",
+      "bytes": 617,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-013",
+      "title": "Flush-marker correction",
+      "document_kind": "patch-proposal",
+      "published_at": "2025-04-26T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-013.txt",
+      "sha256": "d12b942e20a9dd263b2804d3fa153d66cf6fa505bd23dc1c50529572916f3e07",
+      "bytes": 606,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-014",
+      "title": "Copper Pin review addendum",
+      "document_kind": "review-addendum",
+      "published_at": "2025-04-30T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-014.txt",
+      "sha256": "b2d693df56142de1e3f910256373fc02f9b25acc9579b4a89aab3a22ff0c5e5a",
+      "bytes": 711,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-015",
+      "title": "Pilot schedule board",
+      "document_kind": "schedule",
+      "published_at": "2025-05-04T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-015.txt",
+      "sha256": "9624e86564546fd17cae4d87a50d402eabd2e9171c7e2ca47e30f2bec27ad589",
+      "bytes": 590,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-016",
+      "title": "Tern Queue leaf catalog",
+      "document_kind": "catalog",
+      "published_at": "2025-05-05T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-016.txt",
+      "sha256": "f90da6bbbd724a6c47eb568c8b58a22769e25853929d7a2a2e629d60dc597950",
+      "bytes": 616,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-017",
+      "title": "Fault-camera notebook",
+      "document_kind": "notebook",
+      "published_at": "2025-04-24T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-017.txt",
+      "sha256": "f64acbeb1f83c3236b0b9a767eb1b273b92cdff70e205f8ae83296c8abf89fc4",
+      "bytes": 442,
+      "source_class": "primary_record",
+      "search_body_override": "Fault-camera notebook. Abrupt-power campaign notebook; collection access restricted.",
+      "search_snippet_override": "Abrupt-power campaign notebook; collection access restricted."
+    },
+    {
+      "artifact_id": "doc-018",
+      "title": "Tern Queue pilot review",
+      "document_kind": "exhibit-review",
+      "published_at": "2025-04-19T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-018.txt",
+      "sha256": "07f9c340f2b1363059ff5003e1a290fbf2b37464c76969d52ab6d3630e9d8f10",
+      "bytes": 507,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-019",
+      "title": "Queue-themed invitation copy",
+      "document_kind": "copy-note",
+      "published_at": "2025-04-20T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-019.txt",
+      "sha256": "8b9e32900a1c8cc24d7e9257f7b8b320c657f1ca1665851e94ccf298ea103666",
+      "bytes": 490,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-020",
+      "title": "Tern Queue notification chime options",
+      "document_kind": "design-note",
+      "published_at": "2025-04-22T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-020.txt",
+      "sha256": "aebae888c1800895fbe00e907282662560ed4a93e3906b10f77c99017362630b",
+      "bytes": 454,
+      "source_class": "primary_record"
+    },
+    {
+      "artifact_id": "doc-021",
+      "title": "Spring queue study companion",
+      "document_kind": "research-companion",
+      "published_at": "2025-05-08T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-021.txt",
+      "sha256": "94a4ad92ff99342e2dc37aec01a1489e142b6ca1aba176368ed15f2e314eb37b",
+      "bytes": 724,
+      "source_class": "prior_research"
+    },
+    {
+      "artifact_id": "doc-022",
+      "title": "Tern Queue deployment status",
+      "document_kind": "deployment-record",
+      "published_at": "2025-05-10T12:00:00Z",
+      "revision": "1",
+      "media_type": "text/plain; charset=utf-8",
+      "path": "documents/doc-022.txt",
+      "sha256": "586e070706bc2b40f739e11339e1f12133047c53962aef5d59d2318986b1cff1",
+      "bytes": 612,
+      "source_class": "primary_record"
+    }
+  ],
+  "routes": [
+    {
+      "route": "archive.title",
+      "operation": "search",
+      "search_fields": [
+        "title"
+      ],
+      "request_fields": [
+        "query",
+        "page_size",
+        "cursor"
+      ],
+      "default_page_size": 5,
+      "maximum_page_size": 5
+    },
+    {
+      "route": "archive.body",
+      "operation": "search",
+      "search_fields": [
+        "title",
+        "body"
+      ],
+      "request_fields": [
+        "query",
+        "page_size",
+        "cursor"
+      ],
+      "default_page_size": 5,
+      "maximum_page_size": 5
+    },
+    {
+      "route": "archive.read",
+      "operation": "read",
+      "request_fields": [
+        "artifact_id",
+        "revision"
+      ],
+      "response_fields": [
+        "artifact_id",
+        "revision",
+        "status",
+        "retryable",
+        "content",
+        "sha256",
+        "attempt"
+      ]
+    }
+  ],
+  "search_contract": {
+    "normalization": "Unicode NFKC, casefold, then collapse whitespace; query must be nonempty and at most 256 characters.",
+    "cases": "Use search_cases when normalized route/query matches exactly; otherwise use lexical_fallback.",
+    "lexical_fallback": "Split the normalized query on whitespace. Match every token as a substring of the normalized selected field(s). No stemming, hidden synonyms or semantic ranking.",
+    "fallback_order": "published_at descending, then artifact_id ascending",
+    "mode_filter": "Apply mode exclusions before pagination, counts and snippets. Do not expose excluded IDs or titles.",
+    "pagination": "Cursor is a decimal zero-based offset bound to corpus_id, route, normalized query and mode by the adapter. Return at most page_size rows, total_matches, has_more and next_cursor; last page has next_cursor null.",
+    "result_fields": [
+      "artifact_id",
+      "title",
+      "document_kind",
+      "published_at",
+      "revision",
+      "snippet"
+    ],
+    "snippet": "First 160 body characters after the metadata header; never include a private evaluator field or content unavailable to this search route.",
+    "restricted_metadata": "When present, search_body_override replaces the retained document body for matching; search_snippet_override replaces its snippet. These are provider metadata, not a read or inspection."
+  },
+  "search_cases": [
+    {
+      "case_id": "title-current",
+      "route": "archive.title",
+      "query": "Tern Queue",
+      "result_ids": [
+        "doc-001",
+        "doc-002",
+        "doc-006",
+        "doc-004",
+        "doc-018",
+        "doc-005",
+        "doc-010",
+        "doc-003",
+        "doc-007",
+        "doc-009",
+        "doc-011",
+        "doc-016",
+        "doc-020",
+        "doc-022"
+      ]
+    },
+    {
+      "case_id": "body-current",
+      "route": "archive.body",
+      "query": "Tern Queue",
+      "result_ids": [
+        "doc-006",
+        "doc-004",
+        "doc-002",
+        "doc-003",
+        "doc-001",
+        "doc-005",
+        "doc-007",
+        "doc-009",
+        "doc-010",
+        "doc-011",
+        "doc-016",
+        "doc-018",
+        "doc-019",
+        "doc-020",
+        "doc-022"
+      ]
+    },
+    {
+      "case_id": "title-archive-term",
+      "route": "archive.title",
+      "query": "Copper Pin",
+      "result_ids": [
+        "doc-012",
+        "doc-008",
+        "doc-014"
+      ]
+    },
+    {
+      "case_id": "body-archive-term",
+      "route": "archive.body",
+      "query": "Copper Pin",
+      "result_ids": [
+        "doc-002",
+        "doc-003",
+        "doc-008",
+        "doc-009",
+        "doc-012",
+        "doc-013",
+        "doc-014",
+        "doc-015",
+        "doc-021"
+      ]
+    },
+    {
+      "case_id": "body-flush",
+      "route": "archive.body",
+      "query": "flush marker",
+      "result_ids": [
+        "doc-003",
+        "doc-008",
+        "doc-013",
+        "doc-014"
+      ]
+    },
+    {
+      "case_id": "title-companion",
+      "route": "archive.title",
+      "query": "Spring queue study",
+      "result_ids": [
+        "doc-021"
+      ]
+    }
+  ],
+  "read_contract": {
+    "attempt_key": [
+      "trial_id",
+      "artifact_id",
+      "revision"
+    ],
+    "sequence": "Count every attempted read, including failures. Use listed outcomes by one-based attempt, then repeat the final outcome. Do not reset counters when an actor changes.",
+    "default_outcomes": [
+      {
+        "status": "pass",
+        "retryable": false,
+        "content": "exact UTF-8 bytes at artifact.path"
+      }
+    ],
+    "overrides": {
+      "doc-011": [
+        {
+          "status": "transient_error",
+          "retryable": true,
+          "code": "temporary_archive_timeout",
+          "content": null
+        },
+        {
+          "status": "pass",
+          "retryable": false,
+          "content": "exact UTF-8 bytes at artifact.path"
+        }
+      ],
+      "doc-017": [
+        {
+          "status": "access_blocked",
+          "retryable": false,
+          "code": "collection_access_restricted",
+          "content": null
+        }
+      ]
+    },
+    "unknown_id": "not_found, retryable false, no content",
+    "unknown_revision": "revision_unavailable, retryable false, no content",
+    "excluded_by_mode": "out_of_scope, retryable false, no content",
+    "no_failure_leakage": "Failed reads return metadata/status only. Never return body, body hash as proof of retrieval, or partial text from the retained file."
+  },
+  "reference_syntax": "[[artifact_id]] is an ordinary document reference. It identifies a target, not a read, endorsement or semantic relationship.",
+  "modes": {
+    "fresh": {
+      "seed_artifact_ids": [
+        "doc-001"
+      ],
+      "excluded_artifact_ids": [
+        "doc-021"
+      ],
+      "description": "Independent discovery arm. Exclude prior study companion from every route."
+    },
+    "reuse": {
+      "seed_artifact_ids": [
+        "doc-001",
+        "doc-021"
+      ],
+      "excluded_artifact_ids": [],
+      "description": "Prior-study reuse arm. Companion is a Trunk resource and historical synthesis, not independent primary evidence."
+    }
+  }
+}

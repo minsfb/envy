@@ -8,6 +8,7 @@ source "$ENVY_ROOT/lib/paths.sh"
 SRC="$ENVY_DATA_DIR/chezmoi-source"
 CONFLICT_BROKER="$ENVY_ROOT/features/chezmoi-conflicts.py"
 COMPOSER="$ENVY_ROOT/lib/compose_chezmoi.py"
+STARTUP="$ENVY_ROOT/lib/startup_integration.py"
 STATE_ROOT="$ENVY_STATE_DIR"
 BACKUP_ROOT="$STATE_ROOT/backups/chezmoi"
 # shellcheck source=lib/pkg.sh
@@ -83,6 +84,9 @@ _link_xdg_overrides() {
   if [[ "$config_home" != "$HOME/.config" ]]; then
     _link_owned_xdg_path "$HOME/.config/mise/config.toml" "$config_home/mise/config.toml"
     _link_owned_xdg_path "$HOME/.config/envy/tmux-autoattach.sh" "$config_home/envy/tmux-autoattach.sh"
+    _link_owned_xdg_path "$HOME/.config/envy/bashrc" "$config_home/envy/bashrc"
+    _link_owned_xdg_path "$HOME/.config/envy/zshrc" "$config_home/envy/zshrc"
+    _link_owned_xdg_path "$HOME/.config/envy/tmux.conf" "$config_home/envy/tmux.conf"
   fi
   if [[ "$data_home" != "$HOME/.local/share" ]]; then
     _link_owned_xdg_path "$HOME/.local/share/envy/zsh" "$data_home/envy/zsh"
@@ -91,11 +95,12 @@ _link_xdg_overrides() {
 }
 
 _converge() {
-  _compose_source
   local was_installed=true
   command -v chezmoi >/dev/null 2>&1 || was_installed=false
   pkg_ensure chezmoi chezmoi
   [[ "$was_installed" == true ]] || { mkdir -p "$STATE_ROOT/providers"; touch "$STATE_ROOT/providers/chezmoi.installed"; }
+  python3 "$STARTUP" prepare
+  _compose_source
   chezmoi init --source "$SRC"
   _capture_backups
   "$CONFLICT_BROKER" apply "$SRC"
@@ -103,6 +108,7 @@ _converge() {
     python3 "$ENVY_ROOT/lib/dependencies.py" converge
   fi
   _link_xdg_overrides
+  python3 "$STARTUP" converge
   _record_created_files
   if [[ -n "${ENVY_STATE_FILE:-}" && -f "$ENVY_STATE_FILE" ]]; then
     local encoded_backup_root
@@ -112,6 +118,7 @@ _converge() {
 }
 
 _remove() {
+  python3 "$STARTUP" remove
   local rel source target
   if [[ -f "$BACKUP_ROOT/existing.list" ]]; then
     while IFS= read -r rel; do
@@ -172,6 +179,7 @@ _verify() {
   [[ -d "$SRC" ]]
   _composition_current
   "$CONFLICT_BROKER" verify "$SRC"
+  python3 "$STARTUP" verify
   if [[ "${ENVY_SKIP_DEPENDENCY_PINS:-0}" != 1 ]]; then
     python3 "$ENVY_ROOT/lib/dependencies.py" verify
   fi

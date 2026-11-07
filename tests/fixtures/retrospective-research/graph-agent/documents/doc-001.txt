@@ -1,0 +1,8 @@
+Tern Queue record register
+Record: doc-001
+Date: 2025-05-20
+Collection: Fictional queue-study archive
+
+The pilot records are grouped by the question they answer. The charter and queue design are [[doc-002]] and [[doc-003]]. The review is [[doc-004]]. The measurements packet consists of the latency worksheet [[doc-005]] and counter audit [[doc-009]]. The boundary checklist [[doc-010]] tracks material absent from the measurement packet.
+
+The schedule board [[doc-015]] records where review attachments were filed. Smaller related records are collected in [[doc-016]]. The current deployment entry is [[doc-022]]. This register contains no performance measurements or approval decision of its own.

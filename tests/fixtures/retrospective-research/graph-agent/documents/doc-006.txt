@@ -1,0 +1,8 @@
+Tern Queue rollout summary
+Record: doc-006
+Date: 2025-04-21
+Collection: Fictional queue-study archive
+
+The presentation summary for the wider pilot says: “The retry gate meets the latency target and no items were lost in any trial.” The summary cites the normal-operation worksheet [[doc-005]] and describes the local pilot approval in [[doc-004]] as a general readiness signal.
+
+The summary was compiled before the restart campaign attachment was added to the review packet. No power-interruption counts appear in this note. The deployment board entry is [[doc-022]].

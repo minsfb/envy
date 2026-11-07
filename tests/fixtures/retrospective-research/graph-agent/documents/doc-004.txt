@@ -1,0 +1,8 @@
+Tern Queue pilot review
+Record: doc-004
+Date: 2025-04-18
+Collection: Fictional queue-study archive
+
+Decision: approve a supervised, single-client pilot of local enqueue and acknowledgement. This approval covers the input and local notification path only. Batch export remains deferred. Durability under abrupt power interruption remains a separate exit condition and is not approved by this decision.
+
+The panel reviewed [[doc-003]] and the normal-operation latency worksheet [[doc-005]]. The boundary checklist [[doc-010]] records follow-up evidence. The project register [[doc-001]] locates other attachments. This record does not approve an unattended rollout or multiple concurrent clients.

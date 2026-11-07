@@ -1,0 +1,8 @@
+Copper Pin archive docket
+Record: doc-012
+Date: 2025-04-28
+Collection: Fictional queue-study archive
+
+This docket locates the durability campaign's retained records. The restart ledger is [[doc-008]], the flush-marker proposal is [[doc-013]], and the review addendum is [[doc-014]]. The fault-camera notebook is [[doc-017]].
+
+The campaign name was kept for filing continuity after the queue interface was renamed. The original design is [[doc-003]]. The pilot schedule board [[doc-015]] points to this docket by its older campaign name. The docket supplies navigation and chronology; it contains no new measurements.

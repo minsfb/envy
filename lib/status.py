@@ -50,7 +50,7 @@ def main() -> int:
     print()
     print(
         f"  {'FEATURE':<18} {'TIER':<11} {'ORIGIN':<18} "
-        f"{'ENABLED':<10} {'STATUS':<10} VERIFY"
+        f"{'ENABLED':<10} {'LIFECYCLE':<12} {'STATUS':<20} VERIFY"
     )
 
     enabled_count = failed_count = drifted_count = unknown_count = 0
@@ -66,13 +66,15 @@ def main() -> int:
         origin = definition.get("_origin", "core")
         print(
             f"  {name:<18} {tier:<11} {origin:<18} "
-            f"{str(enabled).lower():<10} {status:<10} {verification}"
+            f"{str(enabled).lower():<10} {definition.get('lifecycle', 'active'):<12} {status:<20} {verification}"
         )
         if enabled:
             enabled_count += 1
             failed_count += status == "failed"
             drifted_count += verification == "drifted"
             unknown_count += verification == "unknown"
+        elif feature.get("retirement"):
+            failed_count += feature["retirement"].get("status") == "failed"
 
     print()
     print(

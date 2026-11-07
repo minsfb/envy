@@ -1,4 +1,8 @@
-# .bashrc — managed by envy/chezmoi
+# Interactive Bash overlay, sourced after the host's startup configuration.
+case $- in *i*) ;; *) return 0 ;; esac
+# Login profiles may change PATH after sourcing .bashrc. Defer the overlay
+# until the include at the end of the active login profile.
+if shopt -q login_shell && [ "${_ENVY_LOGIN_READY:-}" != 1 ]; then return 0; fi
 
 export PATH="$HOME/.local/bin:$PATH"
 [ -f {{ (joinPath .xdgConfigHome "envy/init-sh.env") | quote }} ] && source {{ (joinPath .xdgConfigHome "envy/init-sh.env") | quote }}
@@ -10,16 +14,6 @@ if [ -d "$_nv_shell_dir" ]; then
   done
 fi
 
-case $- in
-  *i*)
-    if [ -z "${ZSH_VERSION:-}" ] && [ -z "${ENVY_NO_ZSH:-}" ] \
-      && [ -z "${ENVY_BASH_EXECD:-}" ] && command -v zsh >/dev/null 2>&1; then
-      export ENVY_BASH_EXECD=1
-      exec zsh
-    fi
-    ;;
-esac
-
 command -v mise >/dev/null && eval "$(mise activate bash)"
 
 if [ -d "$_nv_shell_dir" ]; then
@@ -30,7 +24,15 @@ fi
 unset _nv_fragment _nv_shell_dir
 
 [ -n "${ENVY_SECRETS_FILE:-}" ] && [ -f "$ENVY_SECRETS_FILE" ] && source "$ENVY_SECRETS_FILE"
-[ -f ~/.bashrc.local ] && source ~/.bashrc.local
+[ -f {{ (joinPath .xdgConfigHome "envy/nvm-init.bash") | quote }} ] && source {{ (joinPath .xdgConfigHome "envy/nvm-init.bash") | quote }}
 command -v bat >/dev/null && alias cat='bat --paging=never --style=plain'
 command -v glow >/dev/null && alias md='glow'
+[ -f ~/.bashrc.local ] && source ~/.bashrc.local
+
+if [ -z "${ENVY_NO_ZSH:-}" ] && [ -z "${ENVY_BASH_EXECD:-}" ] && command -v zsh >/dev/null 2>&1; then
+  export ENVY_BASH_EXECD=1
+  if shopt -q login_shell; then exec zsh -l; else exec zsh; fi
+fi
 [ -f {{ (joinPath .xdgConfigHome "envy/tmux-autoattach.sh") | quote }} ] && source {{ (joinPath .xdgConfigHome "envy/tmux-autoattach.sh") | quote }}
+
+return 0

@@ -1,0 +1,8 @@
+Tern Queue leaf catalog
+Record: doc-016
+Date: 2025-05-05
+Collection: Fictional queue-study archive
+
+Related records include notification chime options [[doc-020]], invitation copy [[doc-019]], and an exhibit-team document titled “Tern Queue pilot review” [[doc-018]]. The exhibit document has its own stable catalog identity; its title is identical to the queue group's review [[doc-004]].
+
+The fault-camera notebook is [[doc-017]]. The record register [[doc-001]] contains the core pilot packet. Catalog inclusion records a relationship or shared vocabulary, not approval or a finding about system reliability.

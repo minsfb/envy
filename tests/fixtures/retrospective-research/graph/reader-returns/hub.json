@@ -1,0 +1,7 @@
+{
+  "id": "return-hub",
+  "actor": "reader",
+  "source_id": "hub",
+  "inspected_extent": "body",
+  "fixture_only": true
+}

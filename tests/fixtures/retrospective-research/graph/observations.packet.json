@@ -1,0 +1,836 @@
+{
+  "schema_version": 1,
+  "batch_id": "observations",
+  "actor_id": "coordinator",
+  "assignment_id": null,
+  "packet_kind": "observe",
+  "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+  "submitted_at": "2026-01-02T10:00:00Z",
+  "mutations": [
+    {
+      "op": "insert",
+      "table": "work_items",
+      "record": {
+        "work_id": "work-hub",
+        "kind": "read",
+        "artifact_id": "hub",
+        "question_id": "decision",
+        "request_json": {
+          "source_id": "hub",
+          "format": "html",
+          "extent": {
+            "body": "all"
+          }
+        },
+        "logical_key": "read-hub-body-v1",
+        "required_scope_key": "body",
+        "format_policy_sha256": "7a08fefc8933c123e2862119172fb1944f95d20366d1edb5c6560423342e7101",
+        "purpose": "Establish pilot review context",
+        "stage": "baseline",
+        "branch": "pilot",
+        "generation": 0,
+        "transition_reason": "Supplied plausible root"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "work_origins",
+      "record": {
+        "origin_id": "root-hub",
+        "work_id": "work-hub",
+        "root_basis": "Supplied fixture root",
+        "originating_generation": 0
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assignments",
+      "record": {
+        "assignment_id": "assignment-hub",
+        "work_id": "work-hub",
+        "actor_id": "reader",
+        "claimed_at": "2026-01-02T09:50:00Z",
+        "lease_expires_at": "2026-01-02T10:30:00Z",
+        "generation_at_claim": 0,
+        "plan_sha256": "b0ccf1b1d00389dfe8f43a526f71856c7ed1df16ef017dd58316979274b35be2",
+        "plan_item_id": "read-hub"
+      }
+    },
+    {
+      "op": "update",
+      "table": "work_items",
+      "id": "work-hub",
+      "expected_revision": 1,
+      "changes": {
+        "state": "leased",
+        "transition_reason": "Assigned fixture reader"
+      }
+    },
+    {
+      "op": "update",
+      "table": "assignments",
+      "id": "assignment-hub",
+      "expected_revision": 1,
+      "changes": {
+        "state": "running"
+      }
+    },
+    {
+      "op": "update",
+      "table": "work_items",
+      "id": "work-hub",
+      "expected_revision": 2,
+      "changes": {
+        "state": "running",
+        "transition_reason": "Reader started"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "operation_links",
+      "record": {
+        "operation_id": "op-hub",
+        "assignment_id": "assignment-hub",
+        "budget_event_id": "budget-read-hub",
+        "request_sha256": "e9cb632fcaacabe2aad91fb0c9031caa61f239ec42109cc1e5d8afa54c244cd2",
+        "receipt_sha256": "fd0bf508836ae2b464a927dcaa0a1055754bedba6dd89acf5ffb891f9dfa24a9",
+        "execution_state": "succeeded",
+        "verification_state": "verified"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifact_versions",
+      "record": {
+        "version_id": "version-hub",
+        "artifact_id": "hub",
+        "provider_revision": "r1",
+        "first_observed_at": "2026-01-02T09:51:00Z",
+        "version_basis": "Fictional provider revision token"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "captures",
+      "record": {
+        "capture_id": "capture-hub",
+        "artifact_id": "hub",
+        "operation_id": "op-hub",
+        "version_id": "version-hub",
+        "format": "html",
+        "relative_path": "operations/read-hub/output.html",
+        "sha256": "46af8d7508a7c5156fb969a58bff062f1bb0faf17fc62ab1f20ba17b0901a57c",
+        "capture_extent_json": {
+          "body": "all",
+          "comments": "not_retained",
+          "visuals": "none"
+        },
+        "extraction_status": "complete",
+        "receipt_sha256": "fd0bf508836ae2b464a927dcaa0a1055754bedba6dd89acf5ffb891f9dfa24a9",
+        "captured_at": "2026-01-02T09:51:00Z"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "reader_returns",
+      "record": {
+        "return_id": "return-hub",
+        "actor_id": "reader",
+        "assignment_id": "assignment-hub",
+        "file_path": "reader-returns/hub.json",
+        "payload_sha256": "58634c2a507690b4f49262a725a7ee289ed10afd26d476098ccb949a803abc86",
+        "receipt_sha256": "fd0bf508836ae2b464a927dcaa0a1055754bedba6dd89acf5ffb891f9dfa24a9",
+        "recorded_budget_event": "budget-assess-hub",
+        "verification_state": "verified"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspections",
+      "record": {
+        "inspection_id": "inspection-hub",
+        "artifact_id": "hub",
+        "return_id": "return-hub",
+        "actor_id": "reader",
+        "inspection_extent": "Complete retained body; comments unavailable",
+        "method": "Read retained HTML",
+        "inspected_at": "2026-01-02T10:00:00Z",
+        "attested_started_at": "2026-01-02T09:52:00Z",
+        "attested_finished_at": "2026-01-02T09:58:00Z",
+        "provenance_basis": "native"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspection_captures",
+      "record": {
+        "inspection_id": "inspection-hub",
+        "capture_id": "capture-hub",
+        "inspected_extent_json": {
+          "body": "all"
+        }
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspection_scopes",
+      "record": {
+        "inspection_id": "inspection-hub",
+        "question_id": "decision",
+        "required_scope_key": "body",
+        "format_policy_sha256": "7a08fefc8933c123e2862119172fb1944f95d20366d1edb5c6560423342e7101",
+        "coverage": "sufficient",
+        "basis": "Entire body inspected under the fixture policy"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "locators",
+      "record": {
+        "locator_id": "hub-scope",
+        "capture_id": "capture-hub",
+        "locator_kind": "section",
+        "locator_json": {
+          "id": "scope"
+        }
+      }
+    },
+    {
+      "op": "insert",
+      "table": "locators",
+      "record": {
+        "locator_id": "hub-refs",
+        "capture_id": "capture-hub",
+        "locator_kind": "section",
+        "locator_json": {
+          "id": "refs"
+        }
+      }
+    },
+    {
+      "op": "insert",
+      "table": "work_items",
+      "record": {
+        "work_id": "work-design",
+        "kind": "read",
+        "artifact_id": "design",
+        "question_id": "decision",
+        "request_json": {
+          "source_id": "design",
+          "format": "html",
+          "extent": {
+            "body": "all"
+          }
+        },
+        "logical_key": "read-design-body-v1",
+        "required_scope_key": "body",
+        "format_policy_sha256": "7a08fefc8933c123e2862119172fb1944f95d20366d1edb5c6560423342e7101",
+        "purpose": "Establish pilot review context",
+        "stage": "baseline",
+        "branch": "pilot",
+        "generation": 0,
+        "transition_reason": "Supplied plausible root"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "work_origins",
+      "record": {
+        "origin_id": "root-design",
+        "work_id": "work-design",
+        "root_basis": "Supplied fixture root",
+        "originating_generation": 0
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assignments",
+      "record": {
+        "assignment_id": "assignment-design",
+        "work_id": "work-design",
+        "actor_id": "reader",
+        "claimed_at": "2026-01-02T09:50:00Z",
+        "lease_expires_at": "2026-01-02T10:30:00Z",
+        "generation_at_claim": 0,
+        "plan_sha256": "b0ccf1b1d00389dfe8f43a526f71856c7ed1df16ef017dd58316979274b35be2",
+        "plan_item_id": "read-design"
+      }
+    },
+    {
+      "op": "update",
+      "table": "work_items",
+      "id": "work-design",
+      "expected_revision": 1,
+      "changes": {
+        "state": "leased",
+        "transition_reason": "Assigned fixture reader"
+      }
+    },
+    {
+      "op": "update",
+      "table": "assignments",
+      "id": "assignment-design",
+      "expected_revision": 1,
+      "changes": {
+        "state": "running"
+      }
+    },
+    {
+      "op": "update",
+      "table": "work_items",
+      "id": "work-design",
+      "expected_revision": 2,
+      "changes": {
+        "state": "running",
+        "transition_reason": "Reader started"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "operation_links",
+      "record": {
+        "operation_id": "op-design",
+        "assignment_id": "assignment-design",
+        "budget_event_id": "budget-read-design",
+        "request_sha256": "1917e7992e5f839e4ed26616b52065d7c06f77384075cda5bbc99793921f2485",
+        "receipt_sha256": "9789865a11a1b9d38ec8673ffa914f14887ab9becc1c0e7ece8fa3ca610a4b62",
+        "execution_state": "succeeded",
+        "verification_state": "verified"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifact_versions",
+      "record": {
+        "version_id": "version-design",
+        "artifact_id": "design",
+        "provider_revision": "r1",
+        "first_observed_at": "2026-01-02T09:51:00Z",
+        "version_basis": "Fictional provider revision token"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "captures",
+      "record": {
+        "capture_id": "capture-design",
+        "artifact_id": "design",
+        "operation_id": "op-design",
+        "version_id": "version-design",
+        "format": "html",
+        "relative_path": "operations/read-design/output.html",
+        "sha256": "3e59f9d22e2948164fa74762b6210461e12382304ee9b80568cdda4892ef6217",
+        "capture_extent_json": {
+          "body": "all",
+          "comments": "not_retained",
+          "visuals": "none"
+        },
+        "extraction_status": "complete",
+        "receipt_sha256": "9789865a11a1b9d38ec8673ffa914f14887ab9becc1c0e7ece8fa3ca610a4b62",
+        "captured_at": "2026-01-02T09:51:00Z"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "reader_returns",
+      "record": {
+        "return_id": "return-design",
+        "actor_id": "reader",
+        "assignment_id": "assignment-design",
+        "file_path": "reader-returns/design.json",
+        "payload_sha256": "2b0156cad88b1e69c69cec0ab32771c6fdaa54c91e7fc32ab3fcb7956111906a",
+        "receipt_sha256": "9789865a11a1b9d38ec8673ffa914f14887ab9becc1c0e7ece8fa3ca610a4b62",
+        "recorded_budget_event": "budget-assess-design",
+        "verification_state": "verified"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspections",
+      "record": {
+        "inspection_id": "inspection-design",
+        "artifact_id": "design",
+        "return_id": "return-design",
+        "actor_id": "reader",
+        "inspection_extent": "Complete retained body; comments unavailable",
+        "method": "Read retained HTML",
+        "inspected_at": "2026-01-02T10:00:00Z",
+        "attested_started_at": "2026-01-02T09:52:00Z",
+        "attested_finished_at": "2026-01-02T09:58:00Z",
+        "provenance_basis": "native"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspection_captures",
+      "record": {
+        "inspection_id": "inspection-design",
+        "capture_id": "capture-design",
+        "inspected_extent_json": {
+          "body": "all"
+        }
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspection_scopes",
+      "record": {
+        "inspection_id": "inspection-design",
+        "question_id": "decision",
+        "required_scope_key": "body",
+        "format_policy_sha256": "7a08fefc8933c123e2862119172fb1944f95d20366d1edb5c6560423342e7101",
+        "coverage": "sufficient",
+        "basis": "Entire body inspected under the fixture policy"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "locators",
+      "record": {
+        "locator_id": "design-input",
+        "capture_id": "capture-design",
+        "locator_kind": "section",
+        "locator_json": {
+          "id": "input"
+        }
+      }
+    },
+    {
+      "op": "insert",
+      "table": "locators",
+      "record": {
+        "locator_id": "design-export",
+        "capture_id": "capture-design",
+        "locator_kind": "section",
+        "locator_json": {
+          "id": "export"
+        }
+      }
+    },
+    {
+      "op": "insert",
+      "table": "work_items",
+      "record": {
+        "work_id": "work-review",
+        "kind": "read",
+        "artifact_id": "review",
+        "question_id": "decision",
+        "request_json": {
+          "source_id": "review",
+          "format": "html",
+          "extent": {
+            "body": "all"
+          }
+        },
+        "logical_key": "read-review-body-v1",
+        "required_scope_key": "body",
+        "format_policy_sha256": "7a08fefc8933c123e2862119172fb1944f95d20366d1edb5c6560423342e7101",
+        "purpose": "Establish pilot review context",
+        "stage": "baseline",
+        "branch": "pilot",
+        "generation": 0,
+        "transition_reason": "Supplied plausible root"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "work_origins",
+      "record": {
+        "origin_id": "root-review",
+        "work_id": "work-review",
+        "root_basis": "Supplied fixture root",
+        "originating_generation": 0
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assignments",
+      "record": {
+        "assignment_id": "assignment-review",
+        "work_id": "work-review",
+        "actor_id": "reviewer",
+        "claimed_at": "2026-01-02T09:50:00Z",
+        "lease_expires_at": "2026-01-02T10:30:00Z",
+        "generation_at_claim": 0,
+        "plan_sha256": "b0ccf1b1d00389dfe8f43a526f71856c7ed1df16ef017dd58316979274b35be2",
+        "plan_item_id": "read-review"
+      }
+    },
+    {
+      "op": "update",
+      "table": "work_items",
+      "id": "work-review",
+      "expected_revision": 1,
+      "changes": {
+        "state": "leased",
+        "transition_reason": "Assigned fixture reader"
+      }
+    },
+    {
+      "op": "update",
+      "table": "assignments",
+      "id": "assignment-review",
+      "expected_revision": 1,
+      "changes": {
+        "state": "running"
+      }
+    },
+    {
+      "op": "update",
+      "table": "work_items",
+      "id": "work-review",
+      "expected_revision": 2,
+      "changes": {
+        "state": "running",
+        "transition_reason": "Reader started"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "operation_links",
+      "record": {
+        "operation_id": "op-review",
+        "assignment_id": "assignment-review",
+        "budget_event_id": "budget-read-review",
+        "request_sha256": "5388f01d3bbba34ebafcc87663c6ff58ede0f7a13cc51ee7172b3ef62bc43a68",
+        "receipt_sha256": "10505a7376691fb777814455fbbfff5ad2c92fa14009e0095148c353dae65585",
+        "execution_state": "succeeded",
+        "verification_state": "verified"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "artifact_versions",
+      "record": {
+        "version_id": "version-review",
+        "artifact_id": "review",
+        "provider_revision": "r1",
+        "first_observed_at": "2026-01-02T09:51:00Z",
+        "version_basis": "Fictional provider revision token"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "captures",
+      "record": {
+        "capture_id": "capture-review",
+        "artifact_id": "review",
+        "operation_id": "op-review",
+        "version_id": "version-review",
+        "format": "html",
+        "relative_path": "operations/read-review/output.html",
+        "sha256": "589be0ca3b3344a8707fa87058c1898cfb2afbd0ce5545303da0d42d4ca0e40f",
+        "capture_extent_json": {
+          "body": "all",
+          "comments": "not_retained",
+          "visuals": "none"
+        },
+        "extraction_status": "complete",
+        "receipt_sha256": "10505a7376691fb777814455fbbfff5ad2c92fa14009e0095148c353dae65585",
+        "captured_at": "2026-01-02T09:51:00Z"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "reader_returns",
+      "record": {
+        "return_id": "return-review",
+        "actor_id": "reviewer",
+        "assignment_id": "assignment-review",
+        "file_path": "reader-returns/review.json",
+        "payload_sha256": "29c5c10b31deee21038c0bd229415e7bd1b2ce85cd72a0cf6d53dbf372f0a5e7",
+        "receipt_sha256": "10505a7376691fb777814455fbbfff5ad2c92fa14009e0095148c353dae65585",
+        "recorded_budget_event": "budget-assess-review",
+        "verification_state": "verified"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspections",
+      "record": {
+        "inspection_id": "inspection-review",
+        "artifact_id": "review",
+        "return_id": "return-review",
+        "actor_id": "reviewer",
+        "inspection_extent": "Complete retained body; comments unavailable",
+        "method": "Read retained HTML",
+        "inspected_at": "2026-01-02T10:00:00Z",
+        "attested_started_at": "2026-01-02T09:52:00Z",
+        "attested_finished_at": "2026-01-02T09:58:00Z",
+        "provenance_basis": "native"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspection_captures",
+      "record": {
+        "inspection_id": "inspection-review",
+        "capture_id": "capture-review",
+        "inspected_extent_json": {
+          "body": "all"
+        }
+      }
+    },
+    {
+      "op": "insert",
+      "table": "inspection_scopes",
+      "record": {
+        "inspection_id": "inspection-review",
+        "question_id": "decision",
+        "required_scope_key": "body",
+        "format_policy_sha256": "7a08fefc8933c123e2862119172fb1944f95d20366d1edb5c6560423342e7101",
+        "coverage": "sufficient",
+        "basis": "Entire body inspected under the fixture policy"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "locators",
+      "record": {
+        "locator_id": "review-decision",
+        "capture_id": "capture-review",
+        "locator_kind": "section",
+        "locator_json": {
+          "id": "decision"
+        }
+      }
+    },
+    {
+      "op": "insert",
+      "table": "reference_scans",
+      "record": {
+        "scan_id": "hub-scan",
+        "capture_id": "capture-hub",
+        "return_id": "return-hub",
+        "method": "HTML links and named records",
+        "scanned_extent_json": {
+          "body": "all"
+        },
+        "extracted_count": 2
+      }
+    },
+    {
+      "op": "insert",
+      "table": "reference_occurrences",
+      "record": {
+        "reference_id": "review-mention",
+        "from_artifact_id": "hub",
+        "locator_id": "hub-refs",
+        "scan_id": "hub-scan",
+        "local_reference_key": "mention-1",
+        "kind": "mention",
+        "original_value": "readiness review",
+        "extraction_method": "Reader observed named record"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "reference_occurrences",
+      "record": {
+        "reference_id": "measurements-link",
+        "from_artifact_id": "hub",
+        "locator_id": "hub-refs",
+        "scan_id": "hub-scan",
+        "local_reference_key": "link-1",
+        "kind": "link",
+        "original_value": "archive:measurements",
+        "target_artifact_id": "measurements",
+        "extraction_method": "HTML href"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "leads",
+      "record": {
+        "lead_id": "old-name",
+        "kind": "vocabulary",
+        "original_value": "Grove",
+        "normalized_key": "grove",
+        "significance": "May locate earlier reviews"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "lead_origins",
+      "record": {
+        "origin_id": "old-name-origin",
+        "lead_id": "old-name",
+        "return_id": "return-hub",
+        "returned_lead_id": "old-name-1",
+        "locator_id": "hub-scope",
+        "question_id": "decision",
+        "original_value": "Grove",
+        "origin_basis": "Named in retained body"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertions",
+      "record": {
+        "assertion_id": "hub-trunk",
+        "kind": "role",
+        "subject_artifact_id": "hub",
+        "predicate": "has_role",
+        "value_json": "trunk",
+        "subject_locator_id": "hub-refs",
+        "question_id": "decision",
+        "basis": "inspected",
+        "return_id": "return-hub",
+        "assessed_at": "2026-01-02T10:00:00Z"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertion_evidence",
+      "record": {
+        "evidence_id": "hub-trunk-evidence",
+        "assertion_id": "hub-trunk",
+        "locator_id": "hub-refs",
+        "inspection_id": "inspection-hub",
+        "stance": "support",
+        "basis": "inspected",
+        "rationale": "Organizes the review and measurement records"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertions",
+      "record": {
+        "assertion_id": "hub-relevant",
+        "kind": "relevance",
+        "subject_artifact_id": "hub",
+        "predicate": "is_relevant",
+        "value_json": "relevant",
+        "subject_locator_id": "hub-refs",
+        "question_id": "decision",
+        "basis": "inspected",
+        "return_id": "return-hub",
+        "assessed_at": "2026-01-02T10:00:00Z"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertion_evidence",
+      "record": {
+        "evidence_id": "hub-relevance-evidence",
+        "assertion_id": "hub-relevant",
+        "locator_id": "hub-refs",
+        "inspection_id": "inspection-hub",
+        "stance": "support",
+        "basis": "inspected",
+        "rationale": "Organizes the records needed for this question"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertions",
+      "record": {
+        "assertion_id": "scoped-approval",
+        "kind": "relationship",
+        "subject_artifact_id": "review",
+        "predicate": "approves",
+        "object_artifact_id": "design",
+        "subject_locator_id": "review-decision",
+        "object_locator_id": "design-input",
+        "question_id": "decision",
+        "temporal_scope_json": {
+          "event_start": "2025-12-12",
+          "precision": "day"
+        },
+        "basis": "inspected",
+        "return_id": "return-review",
+        "assessed_at": "2026-01-02T10:00:00Z"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertion_evidence",
+      "record": {
+        "evidence_id": "approval-evidence",
+        "assertion_id": "scoped-approval",
+        "locator_id": "review-decision",
+        "inspection_id": "inspection-review",
+        "stance": "support",
+        "basis": "inspected",
+        "rationale": "Approval is limited to input check"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertions",
+      "record": {
+        "assertion_id": "export-deferral",
+        "kind": "finding",
+        "subject_artifact_id": "review",
+        "predicate": "states",
+        "value_json": {
+          "text": "Export mode is deferred pending measurements"
+        },
+        "subject_locator_id": "review-decision",
+        "question_id": "decision",
+        "basis": "inspected",
+        "return_id": "return-review",
+        "assessed_at": "2026-01-02T10:00:00Z"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertion_evidence",
+      "record": {
+        "evidence_id": "deferral-evidence",
+        "assertion_id": "export-deferral",
+        "locator_id": "review-decision",
+        "inspection_id": "inspection-review",
+        "stance": "support",
+        "basis": "inspected",
+        "rationale": "The same decision explicitly defers export mode"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "claims",
+      "record": {
+        "claim_id": "approval-scope",
+        "text": "Only input check was approved; export mode remains deferred.",
+        "basis": "documented",
+        "reason": "Drafted from scoped review evidence"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "claim_evidence",
+      "record": {
+        "evidence_id": "claim-support",
+        "claim_id": "approval-scope",
+        "claim_revision": 1,
+        "locator_id": "review-decision",
+        "assertion_id": "scoped-approval",
+        "stance": "support",
+        "rationale": "The input check section has explicit approval"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "claim_evidence",
+      "record": {
+        "evidence_id": "claim-qualification",
+        "claim_id": "approval-scope",
+        "claim_revision": 1,
+        "locator_id": "review-decision",
+        "assertion_id": "export-deferral",
+        "stance": "qualify",
+        "rationale": "The approval does not cover export mode"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "claim_questions",
+      "record": {
+        "claim_id": "approval-scope",
+        "claim_revision": 1,
+        "question_id": "decision",
+        "relationship": "partly_answers"
+      }
+    }
+  ]
+}

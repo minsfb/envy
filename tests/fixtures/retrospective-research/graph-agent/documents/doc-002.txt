@@ -1,0 +1,8 @@
+Tern Queue pilot charter
+Record: doc-002
+Date: 2025-04-01
+Collection: Fictional queue-study archive
+
+Tern Queue transfers queued labels between a local producer and a local consumer. The pilot has two independent acceptance conditions: no lost unique items after abrupt power interruption, and p95 handoff latency at or below 120 ms for one client sending batches of 100 items. Duplicate notifications are recorded separately from lost unique items.
+
+The durability campaign was filed under the older name Copper Pin. Batch export and more than one concurrent client are outside this initial charter. The current design is [[doc-003]]; the review record is [[doc-004]].

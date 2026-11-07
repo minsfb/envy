@@ -1,0 +1,8 @@
+Tern Queue boundary checklist
+Record: doc-010
+Date: 2025-05-03
+Collection: Fictional queue-study archive
+
+The normal-operation latency attachment is [[doc-005]]. Recovery replay is [[doc-011]]. The fault-camera notebook is [[doc-017]]. The export boundary remains recorded as deferred by [[doc-004]].
+
+The review packet has no multi-client measurement. Access to the camera notebook has not been granted to this packet's reader group. The absence of that notebook is an evidence limit; the checklist does not record what its frames would show. The schedule board [[doc-015]] identifies the filing period for the restart attachment.

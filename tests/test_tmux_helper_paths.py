@@ -73,7 +73,7 @@ class CanonicalTmuxHelperPaths(unittest.TestCase):
         )
         bootstrap.chmod(0o755)
 
-        tmux_config = render(SOURCE / "dot_tmux.conf.tmpl", self.home, self.bin_dir)
+        tmux_config = render(SOURCE / "dot_config/envy/tmux.conf.tmpl", self.home, self.bin_dir)
         pi_extension = render(
             SOURCE / "dot_pi/agent/extensions/nv-tmux-session.ts.tmpl",
             self.home,

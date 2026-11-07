@@ -1,0 +1,25 @@
+{
+  "policy_sha256": "7a08fefc8933c123e2862119172fb1944f95d20366d1edb5c6560423342e7101",
+  "after_observations": {
+    "unresolved_reference_ids": [
+      "review-mention"
+    ],
+    "pending_obligation_ids": [
+      "lead:old-name",
+      "reference:measurements-link",
+      "reference:review-mention"
+    ],
+    "uninspected_artifact_ids": [
+      "measurements",
+      "other-review"
+    ]
+  },
+  "after_reconciliation": {
+    "review_mention_target": "review",
+    "accepted_approval_scope": "design-input",
+    "trunk_children_without_body_inspection": [
+      "measurements"
+    ]
+  },
+  "fixture_limit": "Packets test SQL contracts only. fixture_only requests/receipts/returns do not satisfy the full legacy operation or reader-return validator."
+}

@@ -1,0 +1,8 @@
+Tern Queue deployment status
+Record: doc-022
+Date: 2025-05-10
+Collection: Fictional queue-study archive
+
+Current configuration at the pilot cutoff: retry-gate notifications are enabled only in the supervised, single-client local pilot. The retained journal remains the durability fallback. Batch export and unattended rollout remain disabled.
+
+The local approval is [[doc-004]], the fallback decision is [[doc-007]], and the latest boundary record is [[doc-010]]. The proposed flush-marker change has not been installed in this configuration. The next decision awaits the outstanding campaign review conditions.

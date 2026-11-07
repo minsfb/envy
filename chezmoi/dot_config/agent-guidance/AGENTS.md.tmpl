@@ -2,14 +2,29 @@
 
 - Follow the closest repository or directory-level `AGENTS.md`; more specific
   instructions override this file.
-- Claude reads this file through `~/.claude/CLAUDE.md`; Codex reads it through
-  `~/.codex/AGENTS.md`.
+- Claude reads this file through `~/.claude/CLAUDE.md`; Codex through
+  `~/.codex/AGENTS.md`; Pi through `~/.pi/agent/AGENTS.md`.
 - This machine is managed by `envy`. Use `envy status`, `envy verify`,
   and focused `envy doctor <area>` checks before changing managed files.
 - Read and follow applicable Markdown rules under
   `~/.config/agent-guidance/rules/`; environment bundles may add instructions
   there without replacing this portable base.
+- Resolve the owning repository and native VCS before source-control work.
+  Place Git task worktrees in the gitignored `<repo-root>/.worktrees/`, creating
+  the directory and adding `/.worktrees/` to `<repo-root>/.gitignore` when needed;
+  follow environment-specific isolation guidance for other VCSs. `<repo-root>`
+  is the owning primary checkout; linked worktrees reuse its worktree area.
+  Never create nested task worktree areas.
+- Treat a non-repository directory as an organizational workspace: identify the
+  relevant child repositories and keep branches/worktrees scoped to their owners.
+  For a new multi-repository project, prefer a project workspace containing
+  sibling checkouts; preserve existing workspace layouts.
 - Never print, log, commit, or place credentials in command arguments or remote
   URLs.
 - Before sharing a repository externally, audit it for private URLs, identities,
   package names, credentials, proprietary documents, and restricted assets.
+- For project exploration or change requests, use the available `develop` skill
+  to identify any missing design or planning work, then load only the relevant
+  next phase. Reuse prior agreements and scale the process to the work; users
+  need not name the phases. Discussion alone does not authorize implementation
+  or publication, and routine questions do not require a project workflow.

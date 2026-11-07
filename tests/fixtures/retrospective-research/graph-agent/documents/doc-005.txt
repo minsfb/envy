@@ -1,0 +1,11 @@
+Tern Queue latency worksheet
+Record: doc-005
+Date: 2025-04-16
+Collection: Fictional queue-study archive
+
+Normal-operation measurements used one client and batches of 100 labels, with no induced restarts. There were 2,400 unique labels in each configuration.
+
+Retained journal baseline: median 82 ms, p95 118 ms.
+Retry-gate configuration: median 65 ms, p95 104 ms.
+
+The charter's 120 ms p95 threshold is met for this workload. The worksheet contains no multi-client or power-interruption latency result. Counter definitions and exclusions are recorded in [[doc-009]]. Its use in the pilot decision is recorded in [[doc-004]].

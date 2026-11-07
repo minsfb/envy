@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "small-fix",
+      "prompt": "In the supplied Python project, change summarize_count so None is treated as zero; integers, including negative values, keep their current behavior. Make the fix and check it locally. No publishing.",
+      "expectations": [
+        "Makes the bounded edit and runs relevant existing tests.",
+        "Does not require a separate PRD, approval cycle, or agent team.",
+        "Does not publish or edit unrelated files."
+      ]
+    },
+    {
+      "id": "design-discussion",
+      "prompt": "We are considering moving our in-process cache into a separate service. Our goal is lower client memory use, but offline operation must still work. Think through the product and architecture tradeoffs with me; do not modify files yet.",
+      "expectations": [
+        "Addresses outcome and consequential architecture uncertainty before implementation breakdown.",
+        "Asks only decision-changing questions and makes no file changes."
+      ]
+    },
+    {
+      "id": "resume-workstream",
+      "prompt": "Continue the approved client/adapter refactor. The agreed interface and acceptance criteria are unchanged. The client worker owns its checkout and is still running; the adapter work is independent and authorized. There is one build slot, currently occupied by the client worker. We have an accepted roadmap and focused tests for each component. What do you do next?",
+      "expectations": [
+        "Reuses accepted design and plan.",
+        "Avoids a duplicate writer or competing build; continues independent adapter work.",
+        "Retains explicit integration ownership and source/evidence handoffs."
+      ]
+    },
+    {
+      "id": "ghe-review-only",
+      "prompt": "Review these GHE PRs and recommend an order: PR 11 changes a parser and PR 12 depends on it and changes the same parser. Both have passing supplied CI logs. Their titles mention task 33, whose scope also includes a migration not in either PR. Do not post comments or merge. This session is outside the repository. Describe your workflow without live provider calls.",
+      "expectations": [
+        "Resolves the actual Git/provider target and sequences the dependent PRs.",
+        "Does not merge, comment, close tasks, or count supplied CI as executed QA."
+      ]
+    },
+    {
+      "id": "git-commit-only",
+      "prompt": "The requested small Git fix and focused tests are complete. Create one local commit on the current feature branch. There is no independent-review requirement; do not push. Explain the concrete next steps without mutating a real repository.",
+      "expectations": [
+        "Uses Git local commit scope and repository conventions.",
+        "Does not require a formal review round or remote authentication for the local commit."
+      ]
+    }
+  ]
+}

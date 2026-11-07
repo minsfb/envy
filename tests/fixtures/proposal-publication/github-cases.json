@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "description": "Synthetic proposed GraphQL schema only; no actual GitHub compatibility evidence.",
+  "client": {"executable": "/owned/fixture-gh", "resolved": "/owned/fixture-gh", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "version": "owned-fixture-v1"},
+  "context": {
+    "viewer": {"login": "fixture-user", "databaseId": 1001},
+    "repository": {"id": "R_fixture", "databaseId": 2001, "name": "proposal-demo", "owner": {"login": "example"}, "visibility": "PRIVATE", "isArchived": false, "hasIssuesEnabled": true, "viewerPermission": "WRITE"}
+  },
+  "context_mutations": [
+    {"path": ["viewer", "databaseId"], "value": 9999},
+    {"path": ["viewer", "login"], "value": "another-fixture"},
+    {"path": ["repository", "databaseId"], "value": 9999},
+    {"path": ["repository", "name"], "value": "another-fixture"},
+    {"path": ["repository", "owner", "login"], "value": "another-fixture"},
+    {"path": ["repository", "visibility"], "value": "INTERNAL"},
+    {"path": ["repository", "visibility"], "value": "UNKNOWN"},
+    {"path": ["repository", "isArchived"], "value": true},
+    {"path": ["repository", "hasIssuesEnabled"], "value": false},
+    {"path": ["repository", "viewerPermission"], "value": "READ"},
+    {"path": ["repository", "viewerPermission"], "value": null},
+    {"path": ["repository", "databaseId"], "value": true}
+  ]
+}

@@ -1,0 +1,8 @@
+Copper Pin review addendum
+Record: doc-014
+Date: 2025-04-30
+Collection: Fictional queue-study archive
+
+The abrupt-power ledger [[doc-008]] does not meet the zero-loss exit condition: seven unique keys are absent. This contradicts the “no items were lost in any trial” sentence of [[doc-006]]. It does not contradict the latency values measured under normal operation.
+
+The local input/notification approval in [[doc-004]] remains limited to its stated scope. Durability approval and batch-export approval are withheld. The flush-marker proposal [[doc-013]] needs a full repeat of the power-interruption cohort before durability closure. The camera notebook [[doc-017]] is unavailable to this review packet.

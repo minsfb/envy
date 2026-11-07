@@ -1,0 +1,7 @@
+{
+  "id": "return-review",
+  "actor": "reviewer",
+  "source_id": "review",
+  "inspected_extent": "body",
+  "fixture_only": true
+}

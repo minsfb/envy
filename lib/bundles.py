@@ -128,6 +128,8 @@ def definition_in_scope(definition: dict[str, Any], hierarchy: list[str]) -> boo
 def restored_feature_enabled(
     state: dict[str, Any], name: str, definition: dict[str, Any]
 ) -> bool:
+    if definition.get("lifecycle") == "deprecated":
+        return False
     historical = state.get("detached_features", {}).get(name)
     if isinstance(historical, dict) and historical.get("origin") in {
         None,
@@ -158,7 +160,7 @@ def manifest_identity(value: dict[str, Any]) -> str:
         if not isinstance(definition, dict) or not definition.get("_root"):
             continue
         root = Path(str(definition["_root"]))
-        for action in ("converge", "verify", "doctor", "remove"):
+        for action in manifest_module.HANDLERS:
             handler = definition.get(action)
             if isinstance(handler, dict) and handler.get("run"):
                 roots.add(root / str(handler["run"]))
@@ -234,6 +236,18 @@ def plan_detach(
         name for name, definition in definitions.items() if definition.get("_origin") == bundle_id
     ]
     target_set = set(target_features)
+    pending_retirements = [
+        name for name in target_features
+        if definitions[name].get("lifecycle") == "deprecated"
+        and state.get("features", {}).get(name, {}).get("retirement")
+        and (state["features"][name]["retirement"].get("status") != "retired"
+             or state["features"][name]["retirement"].get("revision")
+             != definitions[name].get("retirement_revision")
+             or state["features"][name].get("verification") in {"drifted", "failed"})
+    ]
+    if pending_retirements:
+        raise BundleError("complete feature retirement before detach with envy upgrade --only "
+                          + ",".join(pending_retirements))
     blockers: list[str] = []
     for name, definition in definitions.items():
         if name in target_set or not feature_enabled(state, name):
@@ -251,6 +265,7 @@ def plan_detach(
         name
         for name in target_features
         if feature_enabled(state, name)
+        and definitions[name].get("lifecycle") != "deprecated"
         and definition_in_scope(definitions[name], active_hierarchy)
     ]
     irreversible = [

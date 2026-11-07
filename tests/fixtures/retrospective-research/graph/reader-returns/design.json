@@ -1,0 +1,7 @@
+{
+  "id": "return-design",
+  "actor": "reader",
+  "source_id": "design",
+  "inspected_extent": "body",
+  "fixture_only": true
+}

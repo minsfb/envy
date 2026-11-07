@@ -12,14 +12,39 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from node_env import runtime_selection
+
 
 KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+DEFAULT_RESERVED = {"PATH", "HOME", "PWD", "OLDPWD", "NVM_DIR", "NVM_BIN", "WORKSPACE_ROOT"}
 
 
 def assignment(key: str, value: str) -> str:
     if not KEY.fullmatch(key):
         raise ValueError(f"invalid environment key: {key}")
     return f"export {key}={shlex.quote(value)}"
+
+
+def runtime_lines(selection: object) -> list[str]:
+    backend, directory = runtime_selection(selection)
+    return [assignment("ENVY_NODE_BACKEND", backend),
+            assignment("ENVY_NODE_BIN", directory),
+            f'export PATH={shlex.quote(directory)}${{PATH:+:"$PATH"}}']
+
+
+def default_lines(environment: object) -> list[str]:
+    """Render nonsecret feature defaults without replacing caller settings."""
+    if not isinstance(environment, dict):
+        raise ValueError("environment_defaults must be a variable map")
+    lines = []
+    for key, value in environment.items():
+        if (not isinstance(key, str) or not KEY.fullmatch(key)
+                or key in DEFAULT_RESERVED or key.startswith(("ENVY_", "XDG_"))):
+            raise ValueError("invalid or reserved environment_defaults key")
+        if not isinstance(value, str) or "\0" in value:
+            raise ValueError("environment_defaults values must be nonsecret strings")
+        lines.append(f'if [ -z "${{{key}:-}}" ]; then {assignment(key, value)}; fi')
+    return lines
 
 
 def render(manifest: dict[str, Any], state: dict[str, Any], root: str) -> str:
@@ -47,10 +72,39 @@ def render(manifest: dict[str, Any], state: dict[str, Any], root: str) -> str:
         lines.append(assignment(key, str(value)))
 
     state_features = state.get("features", {})
+    nvm = state_features.get("nvm", {})
+    if nvm.get("enabled") and nvm.get("status") == "current":
+        data = nvm.get("data", {})
+        if not isinstance(data, dict):
+            raise ValueError("invalid nvm feature data")
+        directory = data.get("directory", str(Path.home() / ".nvm"))
+        selection = data.get("node_runtime")
+        if "node_runtime" not in data:
+            # Current installations predating runtime metadata can still gain
+            # the configured default PATH without reinstalling Node. Never
+            # inspect a project's .nvmrc or download while rendering.
+            dependencies = json.loads((Path(root) / "dependencies.json").read_text())
+            pin = next(item for item in dependencies["dependencies"] if item["name"] == "nvm")
+            version = pin["node_version"]
+            if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+                raise ValueError("Node default must be an exact version")
+            selection = {"backend": "nvm", "bin": f"{directory}/versions/node/v{version}/bin"}
+        lines.extend(("", "# nvm", assignment("ENVY_NVM_DIR", directory)))
+        lines.extend(runtime_lines(selection))
+
     for name, definition in manifest.get("features", {}).items():
+        if definition.get("lifecycle") == "deprecated":
+            continue
         feature = state_features.get(name, {})
         if not feature.get("enabled") or feature.get("status") != "current":
             continue
+        data = feature.get("data", {})
+        if name != "nvm" and isinstance(data, dict) and "node_runtime" in data:
+            lines.extend(("", f"# {name} Node runtime"))
+            lines.extend(runtime_lines(data["node_runtime"]))
+        if isinstance(data, dict) and "environment_defaults" in data:
+            lines.extend(("", f"# {name} environment defaults"))
+            lines.extend(default_lines(data["environment_defaults"]))
         environment = definition.get("env")
         if not isinstance(environment, dict) or not environment:
             continue
@@ -60,6 +114,9 @@ def render(manifest: dict[str, Any], state: dict[str, Any], root: str) -> str:
             if key == "PATH+":
                 for value in values:
                     lines.append(f'export PATH="$PATH":{shlex.quote(str(value))}')
+            elif key == "PATH^":
+                prefix = shlex.quote(":".join(str(value) for value in values))
+                lines.append(f'export PATH={prefix}${{PATH:+:"$PATH"}}')
             elif len(values) == 1:
                 lines.append(assignment(key, str(values[0])))
             else:

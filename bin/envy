@@ -6,6 +6,12 @@ ENVY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENVY_DIR="$ENVY_ROOT"
 export ENVY_ROOT ENVY_DIR
 
+# Exec consumes the remaining argv verbatim and never takes the lifecycle lock.
+if [[ "${1:-}" == exec ]]; then
+  shift
+  exec bash "$ENVY_ROOT/lib/exec-env.sh" "$@"
+fi
+
 _ENVY_RAW_ARGS=("$@")
 _ENVY_COMMAND_ARGS=()
 _ENVY_BUNDLES=()
@@ -36,6 +42,9 @@ unset _ENVY_RAW_ARGS _ENVY_COMMAND_ARGS _ENVY_INDEX _ENVY_ARG
 
 # shellcheck source=lib/paths.sh
 source "$ENVY_ROOT/lib/paths.sh"
+
+# Long-lived transports may predate managed tools and shell initialization.
+export PATH="$ENVY_BIN_DIR${PATH:+:$PATH}"
 
 _ENVY_STATE_LOCK_DIR="$ENVY_CONFIG_DIR/state.lock.d"
 _ENVY_STATE_LOCK_OWNED=false
@@ -385,6 +394,9 @@ _validate_only_enabled() {
   local feature enabled
   _select_only_has_items || return 0
   for feature in "${SELECT_ONLY[@]}"; do
+    if nv_feature_deprecated "$feature"; then
+      continue
+    fi
     enabled="$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
     [[ "$enabled" == true ]] || die "Feature '$feature' is not enabled. Run 'envy install --reconfigure'."
   done
@@ -395,7 +407,11 @@ _collect_targets() {
   for feature in $(nv_list_features); do
     nv_feature_in_scope "$feature" || continue
     enabled="$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
-    [[ "$enabled" == true ]] || continue
+    if nv_feature_deprecated "$feature"; then
+      [[ "$(nv_state_feature_get "$feature" retirement.status '""' 2>/dev/null || true)" != "" ]] || continue
+    else
+      [[ "$enabled" == true ]] || continue
+    fi
     if _select_only_has_items; then
       _array_contains "$feature" "${SELECT_ONLY[@]}" || continue
     elif _select_except_has_items; then
@@ -491,6 +507,7 @@ _select_install_features() {
   local current_value selection_explicit has_current
   INSTALL_SELECTION=()
   for feature in $(nv_list_features); do
+    nv_feature_deprecated "$feature" && continue
     nv_feature_in_scope "$feature" || continue
     tier="$(nv_feature_tier "$feature")"
     enabled=false
@@ -526,6 +543,7 @@ _validate_install_enables() {
   local feature
   for feature in ${INSTALL_ENABLE[0]+"${INSTALL_ENABLE[@]}"}; do
     nv_feature_exists "$feature" || die "Unknown feature: $feature"
+    nv_feature_deprecated "$feature" && die "Feature '$feature' is deprecated and cannot be enabled."
     nv_feature_in_scope "$feature" \
       || die "Feature '$feature' is unavailable on $ENVY_PLATFORM"
   done
@@ -533,6 +551,7 @@ _validate_install_enables() {
 
 _select_install_feature_with_dependencies() {
   local feature="$1" dependency
+  nv_feature_deprecated "$feature" && die "Feature '$feature' is deprecated and cannot be enabled."
   if [[ -n "${INSTALL_SELECTION[0]+set}" ]] \
     && _array_contains "$feature" "${INSTALL_SELECTION[@]}"; then
     return 0
@@ -617,6 +636,7 @@ _remove_deactivated_features() {
   local feature enabled rc index
   local deactivated=() reversed=()
   for feature in $(nv_list_features); do
+    nv_feature_deprecated "$feature" && continue
     enabled="$(nv_state_feature_get "$feature" enabled false 2>/dev/null || echo false)"
     [[ "$enabled" == true ]] || continue
     if [[ -n "${INSTALL_SELECTION[0]+set}" ]] && _array_contains "$feature" "${INSTALL_SELECTION[@]}"; then
@@ -799,6 +819,16 @@ cmd_upgrade() {
   fi
 
   for feature in "${targets[@]}"; do
+    if nv_feature_deprecated "$feature"; then
+      if [[ "$dry_run" == true ]]; then
+        echo "  WOULD RETIRE $feature"
+      elif python3 "$ENVY_ROOT/lib/retirement.py" "$(nv_manifest_file)" "$(nv_state_file)" "$feature"; then
+        ((applied++)) || true
+      else
+        ((failed++)) || true
+      fi
+      continue
+    fi
     if ! _feature_dependencies_ready "$feature"; then
       [[ "$dry_run" == true ]] || nv_state_feature_result "$feature" failed "dependency is unavailable or drifted"
       ((failed++)) || true
@@ -947,6 +977,11 @@ _doctor_area() {
       [[ -z "$alias" ]] || area="$alias"
       nv_feature_exists "$area" || return 2
       nv_feature_in_scope "$area" || return 2
+      if nv_feature_deprecated "$area"; then
+        echo "$area: deprecated; use envy upgrade --only $area for pending cleanup"
+        nv_verify_feature "$area"
+        return $?
+      fi
       [[ "$(nv_state_feature_get "$area" enabled false 2>/dev/null || echo false)" == true ]] || return 2
       nv_run_feature_handler "$area" doctor || feature_rc=$?
       if [[ $feature_rc -eq $ENVY_HANDLER_UNAVAILABLE ]]; then nv_verify_feature "$area"; else return "$feature_rc"; fi
@@ -1056,6 +1091,11 @@ cmd_uninstall() {
   fi
   for feature in "${reversed[@]}"; do
     rc=0
+    if nv_feature_deprecated "$feature"; then
+      python3 "$ENVY_ROOT/lib/retirement.py" "$(nv_manifest_file)" "$(nv_state_file)" "$feature" || rc=$?
+      if [[ $rc -ne 0 ]]; then ((failed++)) || true; fi
+      continue
+    fi
     ENVY_PURGE="$purge" nv_run_feature_handler "$feature" remove || rc=$?
     if [[ $rc -eq 0 || $rc -eq $ENVY_HANDLER_UNAVAILABLE ]]; then
       [[ $rc -eq $ENVY_HANDLER_UNAVAILABLE ]] && echo "  Retaining external resources for $feature (no remove handler)."
@@ -1452,7 +1492,7 @@ cmd_secrets() {
     python3 "$ENVY_ROOT/features/secrets.py" help
     return
   fi
-  if [[ "$action" =~ ^(push-key|pull-key)$ && "${2:-}" =~ ^(--help|-h)$ ]]; then
+  if [[ "$action" =~ ^(setup|merge|export|push-key|pull-key)$ && "${2:-}" =~ ^(--help|-h)$ ]]; then
     python3 "$ENVY_ROOT/features/secrets.py" "$action" "${2}"
     return
   fi
@@ -1462,7 +1502,7 @@ cmd_secrets() {
   nv_feature_in_scope secrets || die "The secrets feature is unavailable on this platform"
   [[ "$(nv_state_feature_get secrets enabled false 2>/dev/null || echo false)" == true ]] \
     || die "The secrets feature is not installed; run 'envy install --reconfigure' and enable it first"
-  if [[ "$action" =~ ^(push-key|pull-key)$ ]]; then
+  if [[ "$action" =~ ^(setup|merge|export|push-key|pull-key)$ ]]; then
     _feature_dependencies_ready secrets \
       || die "The secrets feature is not initialized; run 'envy upgrade --only chezmoi,mise --force' and retry"
   fi
@@ -1520,6 +1560,7 @@ Global:
   --bundle PATH       Add one explicit feature/resource bundle (repeatable)
 
 Commands:
+  exec [--] COMMAND [ARG...]
   install [--preset core|recommended] [--enable FEATURES] [--reconfigure] [--yes] [--dry-run]
   upgrade [--only/-o FEATURES | --except/-e FEATURES] [--force] [--dry-run]
   status [--json]
@@ -1532,6 +1573,7 @@ Commands:
   remote editor --origin [--transport NAME] [--via ROUTE] [PATH]
   remote shell HOST [--transport NAME] [--cwd PATH]
   remote {status|doctor} HOST
+  secrets {setup|merge|export}    Interactively synchronize selected secret entries
   secrets {push-key|pull-key} HOST [--force] [--yes] [--restore]
   uninstall [--only/-o FEATURES | --except/-e FEATURES] [--purge] [--yes] [--dry-run]
 

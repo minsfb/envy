@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "batch_id": "reconciliation",
+  "actor_id": "coordinator",
+  "assignment_id": null,
+  "packet_kind": "reconcile",
+  "contract_sha256": "164f552b47740089eae7e6fcea99c1db6da5816874d8b1b0573eb1ed421460ac",
+  "submitted_at": "2026-01-02T10:00:00Z",
+  "mutations": [
+    {
+      "op": "insert",
+      "table": "assertion_decisions",
+      "record": {
+        "decision_id": "accept-trunk",
+        "assertion_id": "hub-trunk",
+        "disposition": "accepted",
+        "reason": "Inspected organizing scope supports this role",
+        "actor_id": "coordinator",
+        "expected_revision": 0
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertion_decisions",
+      "record": {
+        "decision_id": "accept-relevance",
+        "assertion_id": "hub-relevant",
+        "disposition": "accepted",
+        "reason": "Organization is relevant to the question",
+        "actor_id": "coordinator",
+        "expected_revision": 0
+      }
+    },
+    {
+      "op": "insert",
+      "table": "assertion_decisions",
+      "record": {
+        "decision_id": "accept-approval",
+        "assertion_id": "scoped-approval",
+        "disposition": "accepted",
+        "reason": "Approval is explicitly scoped to the input section",
+        "actor_id": "coordinator",
+        "expected_revision": 0
+      }
+    },
+    {
+      "op": "insert",
+      "table": "reference_resolutions",
+      "record": {
+        "resolution_id": "initial-review-resolution",
+        "reference_id": "review-mention",
+        "target_artifact_id": "other-review",
+        "basis": "Initial title-based candidate; uncertain",
+        "actor_id": "coordinator"
+      }
+    },
+    {
+      "op": "insert",
+      "table": "reference_resolutions",
+      "record": {
+        "resolution_id": "corrected-review-resolution",
+        "reference_id": "review-mention",
+        "target_artifact_id": "review",
+        "basis": "The retained decision refers to this exact pilot",
+        "actor_id": "coordinator",
+        "replaces_resolution_id": "initial-review-resolution"
+      }
+    }
+  ]
+}

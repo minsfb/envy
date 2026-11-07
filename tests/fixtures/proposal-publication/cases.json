@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "description": "Synthetic offline data. No real provider, account, repository or consent.",
+  "proposals": {
+    "version": 1,
+    "type": "ProposalSet",
+    "batch_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "destination": {
+      "host": "forge.example.invalid",
+      "account": "fixture-user",
+      "account_id": "1001",
+      "owner": "example",
+      "repository": "proposal-demo",
+      "repository_id": "2001",
+      "audience": {
+        "kind": "repository",
+        "realm": "forge.example.invalid",
+        "id": "2001"
+      }
+    },
+    "proposals": [
+      {
+        "id": "22222222222222222222222222222222",
+        "title": "Synthetic dependent proposal",
+        "problem": "A dependent example needs a declared link.",
+        "evidence": "Synthetic local fixture; not a production observation.",
+        "scope": "Documentation example only.",
+        "detail": "Keep all approved design details inline in this Issue.",
+        "steps": ["Describe the dependency."],
+        "acceptance": ["The verified dependency URL appears in the body."],
+        "non_goals": ["No implementation or deployment."],
+        "dependencies": ["11111111111111111111111111111111"],
+        "sensitivity": "repository"
+      },
+      {
+        "id": "11111111111111111111111111111111",
+        "title": "Synthetic foundational proposal",
+        "problem": "A planning example needs an independent first artifact.",
+        "evidence": "Synthetic local fixture; not a production observation.",
+        "scope": "Documentation example only.",
+        "detail": "The public core does not depend on a reflection workflow.",
+        "steps": ["Record the proposed change."],
+        "acceptance": ["Full details are inline and the receipt is verified."],
+        "non_goals": ["No real external write."],
+        "dependencies": [],
+        "sensitivity": "public"
+      }
+    ]
+  },
+  "invalid_mutations": [
+    {"name": "unknown proposal field", "path": ["proposals", 0, "command"], "value": "never execute", "error": "invalid_fields"},
+    {"name": "unavailable Gist selector", "path": ["details_provider"], "value": "gist", "error": "invalid_fields"},
+    {"name": "unknown audience realm", "path": ["destination", "audience", "kind"], "value": "instance", "error": "unsupported_audience"},
+    {"name": "wrong repository audience", "path": ["destination", "audience", "id"], "value": "9999", "error": "unsupported_audience"},
+    {"name": "boolean version", "path": ["version"], "value": true, "error": "unsupported_version"},
+    {"name": "nonopaque identity", "path": ["proposals", 0, "id"], "value": "private-planning-name", "error": "invalid_identifier"},
+    {"name": "unknown sensitivity", "path": ["proposals", 0, "sensitivity"], "value": "unknown", "error": "unsupported_sensitivity"},
+    {"name": "missing rationale", "path": ["proposals", 0, "problem"], "value": "", "error": "invalid_text"}
+  ]
+}

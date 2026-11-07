@@ -1,0 +1,8 @@
+Tern Queue notification chime options
+Record: doc-020
+Date: 2025-04-22
+Collection: Fictional queue-study archive
+
+The presentation mockup compares a soft click with a short tone for a completed handoff. The samples are prerecorded audio cues; their lengths are not measured queue latency. No completion, retry or persistence logic was changed.
+
+The mockup belongs to the related-record catalog [[doc-016]]. The software queue design remains [[doc-003]].

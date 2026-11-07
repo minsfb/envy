@@ -1,0 +1,8 @@
+Tern Queue fallback decision
+Record: doc-007
+Date: 2025-05-02
+Collection: Fictional queue-study archive
+
+Keep the retained journal as the durability fallback. The retry gate may remain enabled for the supervised local pilot, but it does not replace the journal's persistence responsibility. Batch export stays disabled pending the separate review attachment.
+
+The decision distinguishes reducing duplicate notices from retaining every unique queued item. Its local scope follows [[doc-004]]. Current enablement is recorded in [[doc-022]]. The boundary checklist [[doc-010]] remains open for missing restart evidence.

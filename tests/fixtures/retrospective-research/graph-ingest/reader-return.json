@@ -1,0 +1,22 @@
+{
+  "id": "reader-one",
+  "read_id": "read-one",
+  "actor": "reader",
+  "graph_assignment_id": "assignment-inspect",
+  "inspection": "partial",
+  "relevance": "relevant",
+  "coverage": "Read the retained HTML body; comments, revisions and visual assets were unavailable.",
+  "expansion_review": "Retain the appendix, Grove term, and unresolved outcome question.",
+  "leads": [
+    {"id": "term-one", "kind": "vocabulary", "value": "Grove ledger", "locator": "body", "reason": "May identify the earlier project name.", "questions": ["decision", "outcomes"]},
+    {"id": "record-one", "kind": "linked-record", "value": "migration appendix", "locator": "body", "reason": "Referenced evaluation is not inspected.", "questions": ["decision"]},
+    {"id": "gap-one", "kind": "question-gap", "graph_kind": "inferred_gap", "value": "Were outcomes measured?", "locator": "Source's closing paragraph", "reason": "The current source does not establish later measurements.", "questions": ["outcomes"]}
+  ],
+  "graph": {
+    "inspected_at": "2026-01-02T10:00:00Z",
+    "locators": [{"id": "body", "capture_id": "stdout", "kind": "line", "position": {"unit": "line", "start": 1, "end": 4}, "excerpt": "The pilot paused pending migration review."}],
+    "inspections": [{"id": "body-read", "source_id": "doc-a", "extent": "Retained HTML body, lines 1 through 4", "method": "Reader inspected the retained HTML fixture", "limitations": "No comments, provider revisions or visual assets were captured.", "captures": [{"capture_id": "stdout", "extent": {"body": {"unit": "line", "ranges": [{"start": 1, "end": 4}]}}}], "scopes": [{"question_id": "decision", "required_scope_key": "body", "format_policy_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "coverage": "sufficient", "basis": "The assignment requests these four retained body lines in HTML; semantic meaning is reader-attested."}]}],
+    "scans": [{"id": "body-links", "capture_id": "stdout", "method": "Reader enumerated literal links and named record mentions", "extent": {"body": {"unit": "line", "ranges": [{"start": 1, "end": 4}]}}, "limitations": "Only retained body lines; linked targets unread.", "references": [{"id": "link-one", "kind": "link", "value": "https://example.invalid/appendix", "label": "migration appendix", "locator_id": "body", "target_source_id": "unresolved-appendix"}, {"id": "mention-one", "kind": "mention", "value": "Grove ledger", "label": "possible earlier record", "locator_id": "body"}, {"id": "link-again", "kind": "link", "value": "https://example.invalid/appendix", "label": "Repeated occurrence deliberately retained", "locator_id": "body"}]}],
+    "assertions": [{"id": "pause", "kind": "finding", "predicate": "states", "source_id": "doc-a", "value": {"text": "The pilot paused pending migration review."}, "question_id": "decision", "basis": "inspected", "subject_locator_id": "body", "evidence": [{"locator_id": "body", "inspection_id": "body-read", "stance": "support", "basis": "inspected", "rationale": "The inspected paragraph explicitly describes the pause."}]}]
+  }
+}

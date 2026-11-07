@@ -9,8 +9,9 @@ GIT_SETUP="$ENVY_ROOT/bin/nv-smart-merge-git-setup"
 
 _verify() {
   [[ -f "$ENGINE" && -x "$CLI" && -x "$GIT_ADAPTER" && -x "$GIT_SETUP" ]]
-  python3 -m py_compile "$ENGINE"
-  "$CLI" --help >/dev/null
+  # Verification must work in a read-only checkout without creating bytecode.
+  python3 -B -c 'import sys; from pathlib import Path; compile(Path(sys.argv[1]).read_bytes(), sys.argv[1], "exec")' "$ENGINE"
+  PYTHONDONTWRITEBYTECODE=1 "$CLI" --help >/dev/null
   "$GIT_SETUP" --help >/dev/null
 }
 

@@ -13,12 +13,12 @@ command -v zsh >/dev/null 2>&1 || { echo 'SKIP: zsh is not installed'; exit 0; }
 
 OVERRIDE="$(printf '{"xdgConfigHome":"%s/.config","xdgDataHome":"%s/.local/share"}' "$TEMP/home" "$TEMP/home")"
 chezmoi execute-template --source "$SOURCE" --override-data "$OVERRIDE" \
-  <"$SOURCE/dot_zshrc.tmpl" >"$TEMP/zshrc"
+  <"$SOURCE/dot_config/envy/zshrc.tmpl" >"$TEMP/zshrc"
 chezmoi execute-template --source "$SOURCE" --override-data "$OVERRIDE" \
-  <"$SOURCE/dot_bashrc.tmpl" >"$TEMP/bashrc"
+  <"$SOURCE/dot_config/envy/bashrc.tmpl" >"$TEMP/bashrc"
 ENVY_BIN_DIR="$TEMP/home/.local/bin" chezmoi execute-template \
   --source "$SOURCE" --destination "$TEMP/home" \
-  <"$SOURCE/dot_tmux.conf.tmpl" >"$TEMP/tmux.conf"
+  <"$SOURCE/dot_config/envy/tmux.conf.tmpl" >"$TEMP/tmux.conf"
 zsh -n "$TEMP/zshrc"
 bash -n "$TEMP/bashrc"
 grep -q 'shell.d' "$TEMP/zshrc" || fail 'zsh bundle fragment hook is missing'

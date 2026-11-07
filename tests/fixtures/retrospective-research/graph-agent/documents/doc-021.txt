@@ -1,0 +1,8 @@
+Spring queue study companion
+Record: doc-021
+Date: 2025-05-08
+Collection: Fictional queue-study archive
+
+This companion summarizes an earlier document review of the local queue pilot. It is a map to retained sources, not a new experiment. Its primary references are the pilot review [[doc-004]], the Copper Pin restart ledger [[doc-008]], and the addendum [[doc-014]]. The campaign docket [[doc-012]] contains related material.
+
+The earlier study found a limited local approval, satisfactory normal-operation latency and an unresolved durability exit condition. It did not obtain the camera notebook [[doc-017]]. Repeated figures in this companion come from the listed primary records and are not independent corroboration.

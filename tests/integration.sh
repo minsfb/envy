@@ -22,17 +22,18 @@ command="${1:-}"
 case "$command" in
   init) mkdir -p "$HOME/.config/chezmoi" ;;
   managed)
-    printf '%s\n' .bashrc .zshrc .config/mise/config.toml .config/mise/mise.lock .config/envy/tmux-autoattach.sh
+    printf '%s\n' .config/envy/bashrc .config/envy/zshrc .config/envy/tmux.conf .config/mise/config.toml .config/mise/mise.lock .config/envy/tmux-autoattach.sh
     ;;
   status)
-    [[ -f "$HOME/.fake-chezmoi-applied" ]] || printf ' A %s/.bashrc\n' "$HOME"
+    [[ -f "$HOME/.fake-chezmoi-applied" ]] || printf ' A %s/.config/envy/bashrc\n' "$HOME"
     ;;
   apply)
     [[ "${HTTPS_PROXY:-}" == proxy-value ]]
     [[ "${https_proxy:-}" == proxy-value ]]
     mkdir -p "$HOME/.config/mise" "$HOME/.config/envy"
-    printf '# fake bashrc\n' >"$HOME/.bashrc"
-    printf '# fake zshrc\n' >"$HOME/.zshrc"
+    printf '# fake bashrc\n' >"$HOME/.config/envy/bashrc"
+    printf '# fake zshrc\n' >"$HOME/.config/envy/zshrc"
+    printf '# fake tmux\n' >"$HOME/.config/envy/tmux.conf"
     cp "$ENVY_ROOT/chezmoi/dot_config/mise/config.toml.tmpl" "$HOME/.config/mise/config.toml"
     cp "$ENVY_ROOT/chezmoi/dot_config/mise/mise.lock" "$HOME/.config/mise/mise.lock"
     cp "$ENVY_ROOT/chezmoi/dot_config/envy/tmux-autoattach.sh" "$HOME/.config/envy/tmux-autoattach.sh"
@@ -65,6 +66,26 @@ case "${1:-}" in
 esac
 EOF
 chmod +x "$BIN_DIR/chezmoi" "$BIN_DIR/mise"
+
+# The fixture selects Linux and tests lifecycle state, not host package setup.
+# Keep terminal's native probe in that same fixture and avoid real installers.
+cat >"$BIN_DIR/uname" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == -s ]]; then
+  echo Linux
+else
+  exec /usr/bin/uname "$@"
+fi
+EOF
+for tool in zsh tmux; do
+  cat >"$BIN_DIR/$tool" <<'EOF'
+#!/usr/bin/env bash
+echo 'availability-only fixture executable must not be invoked' >&2
+exit 99
+EOF
+  chmod +x "$BIN_DIR/$tool"
+done
+chmod +x "$BIN_DIR/uname"
 
 run_cli() {
   run_cli_home "$HOME_DIR" "$@"
@@ -146,7 +167,7 @@ rm -rf "$HOME_DIR/.config/mise/conf.d"
 run_cli upgrade --only mise --force >"$SANDBOX/locked.out"
 grep -qx 'install --locked' "$HOME_DIR/.fake-mise-args" || fail 'locked mise install did not run'
 
-printf '# drift\n' >>"$HOME_DIR/.local/share/envy/chezmoi-source/dot_tmux.conf.tmpl"
+printf '# drift\n' >>"$HOME_DIR/.local/share/envy/chezmoi-source/dot_config/envy/tmux.conf.tmpl"
 if run_cli verify --only chezmoi >"$SANDBOX/drift.out"; then
   fail 'composed-source drift went undetected'
 fi

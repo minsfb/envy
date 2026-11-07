@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMP="$(mktemp -d)"
+# Ownership checks intentionally reject symlink ancestors (such as macOS /var).
+TEMP="$(cd "$TEMP" && pwd -P)"
 trap 'rm -rf "$TEMP"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 

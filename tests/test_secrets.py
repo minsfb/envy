@@ -74,6 +74,7 @@ sys.stdout.buffer.write(b"EXAMPLE=private\\n")
 
     def write_tool(self, name: str, contents: str) -> None:
         path = self.bin / name
+        contents = contents.replace("#!/usr/bin/env python3", f"#!{sys.executable}", 1)
         path.write_text(contents, encoding="utf-8")
         os.chmod(path, 0o755)
 
