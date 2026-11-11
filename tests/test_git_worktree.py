@@ -1,8 +1,10 @@
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import sys
 import unittest
 
 
@@ -124,6 +126,57 @@ class GitWorktreePlacement(unittest.TestCase):
         (self.root / '.gitignore').write_text('/.worktrees/\n!/.worktrees/\n')
         self.call('prepare')
         self.assertEqual((self.root / '.gitignore').read_text(), '/.worktrees/\n!/.worktrees/\n/.worktrees/\n')
+
+    # Piccolo #38: canonical exported placement rejects aliases through absent parents.
+    def test_explicit_missing_parent_aliases_cannot_enter_metadata_or_nested_areas(self):
+        metadata = Path(self.git(self.root, 'rev-parse', '--absolute-git-dir'))
+        alias = Path(self.temp.name) / 'metadata-alias'
+        alias.symlink_to(metadata, target_is_directory=True)
+        self.call('prepare')
+        linked = self.root / '.worktrees/linked'
+        self.git(self.root, 'worktree', 'add', '-qb', 'linked', str(linked), 'HEAD')
+        linked_alias = Path(self.temp.name) / 'linked-alias'
+        linked_alias.symlink_to(linked, target_is_directory=True)
+        for target, message in ((alias / 'missing/task', 'Git administrative metadata'),
+                                (linked_alias / '.worktrees/missing/task', 'Nested task worktree areas')):
+            code = 'import {planWorktreeParent} from ' + json.dumps(HELPER.as_uri()) + '; planWorktreeParent(' + json.dumps(str(self.root)) + ',' + json.dumps(str(target)) + ');'
+            result = subprocess.run(['node', '--input-type=module', '-e', code], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(message, result.stderr)
+            self.assertFalse(target.parent.exists())
+
+    # Piccolo #38: both processes plan an absent area before either may write it.
+    def test_concurrent_area_preparation_preserves_one_ignore_rule(self):
+        ignore = self.root / '.gitignore'
+        ignore.write_text('build/\n# preserve\n')
+        shim = Path(self.temp.name) / 'shim'
+        shim.mkdir()
+        barrier = self.root / '.git/area-test-barrier'
+        barrier.mkdir()
+        executable = shim / 'git'
+        executable.write_text('#!' + sys.executable + '\n' + '''import os,sys,time
+from pathlib import Path
+if "check-ignore" in sys.argv:
+    root=Path(os.environ["AREA_TEST_BARRIER"])
+    (root/str(os.getppid())).touch()
+    deadline=time.monotonic()+10
+    while len(list(root.iterdir()))<2:
+        if time.monotonic()>deadline:sys.exit(3)
+        time.sleep(0.02)
+os.execv(os.environ["AREA_TEST_REAL_GIT"],[os.environ["AREA_TEST_REAL_GIT"],*sys.argv[1:]])
+''')
+        executable.chmod(0o700)
+        env = dict(os.environ, PATH=str(shim) + os.pathsep + os.environ['PATH'],
+                   AREA_TEST_BARRIER=str(barrier), AREA_TEST_REAL_GIT=shutil.which('git'))
+        command = ['node', str(HELPER), 'prepare', '--cwd', str(self.root), '--branch', 'feature/task']
+        children = [subprocess.Popen(command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(2)]
+        for child in children:
+            stdout, stderr = child.communicate(timeout=20)
+            self.assertEqual(child.returncode, 0, stderr)
+            self.assertFalse(json.loads(stdout)['areaMissing'])
+        self.assertEqual(ignore.read_text(), 'build/\n# preserve\n/.worktrees/\n')
+        self.assertFalse((self.root / '.git/nv-worktree-prepare.lock').exists())
+        self.assertFalse((self.root / '.worktrees/feature-task').exists())
 
 
 if __name__ == '__main__':
