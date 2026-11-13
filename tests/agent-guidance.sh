@@ -50,4 +50,6 @@ printf 'new shared skill\n' >"$DEST/.agents/skills/example/SKILL.md"
 # shellcheck disable=SC2088 # Assert the literal path documented for users.
 grep -qF '~/.config/agent-guidance/rules/' "$canonical" \
   || fail 'bundle guidance extension point is missing'
+grep -qF 'Never write to a public repository or upstream project that the user does not' "$canonical" \
+  || fail 'upstream write approval rule is missing'
 echo 'envy agent guidance tests passed'
